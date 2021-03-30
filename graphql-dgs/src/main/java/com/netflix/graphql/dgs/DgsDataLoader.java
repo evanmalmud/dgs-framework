@@ -52,5 +52,7 @@ public @interface DgsDataLoader {
     boolean batching() default true;
 
     int maxBatchSize() default 0;
+
+    String optionsCustomizerName() default "";
 }
 
