@@ -13,17 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-plugins {
-    id("com.gradle.enterprise") version("3.14.1")
-}
 
-gradleEnterprise {
-    buildScan {
-        termsOfServiceUrl = "https://gradle.com/terms-of-service"
-        termsOfServiceAgree = "yes"
-        publishAlways()
-    }
-}
 rootProject.name = "dgs-framework"
 include("graphql-dgs")
 include("graphql-error-types")
@@ -37,15 +27,12 @@ include("graphql-dgs-example-java")
 include("graphql-dgs-example-java-webflux")
 include("graphql-dgs-subscriptions-websockets")
 include("graphql-dgs-subscriptions-websockets-autoconfigure")
-include("graphql-dgs-subscriptions-graphql-sse")
-include("graphql-dgs-subscriptions-graphql-sse-autoconfigure")
 include("graphql-dgs-subscriptions-sse")
 include("graphql-dgs-subscriptions-sse-autoconfigure")
 include("graphql-dgs-spring-boot-micrometer")
 include("graphql-dgs-platform")
 include("graphql-dgs-platform-dependencies")
 include("graphql-dgs-extended-scalars")
-include("graphql-dgs-extended-validation")
 include("graphql-dgs-spring-webflux-autoconfigure")
 include("graphql-dgs-reactive")
 include("graphql-dgs-webflux-starter")

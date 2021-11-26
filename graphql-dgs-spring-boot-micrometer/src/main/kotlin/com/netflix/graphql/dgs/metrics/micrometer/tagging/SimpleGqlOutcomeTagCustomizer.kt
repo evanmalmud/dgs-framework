@@ -17,36 +17,34 @@
 package com.netflix.graphql.dgs.metrics.micrometer.tagging
 
 import com.netflix.graphql.dgs.metrics.DgsMetrics.CommonTags.*
-import com.netflix.graphql.dgs.metrics.micrometer.DgsGraphQLMetricsInstrumentation
 import graphql.ExecutionResult
 import graphql.execution.instrumentation.parameters.InstrumentationExecutionParameters
 import graphql.execution.instrumentation.parameters.InstrumentationFieldFetchParameters
 import io.micrometer.core.instrument.Tag
+import io.micrometer.core.instrument.Tags
 
 class SimpleGqlOutcomeTagCustomizer : DgsExecutionTagCustomizer, DgsFieldFetchTagCustomizer {
 
     override fun getExecutionTags(
-        state: DgsGraphQLMetricsInstrumentation.MetricsInstrumentationState,
         parameters: InstrumentationExecutionParameters,
         result: ExecutionResult,
         exception: Throwable?
     ): Iterable<Tag> {
         return if (result.errors.isNotEmpty() || exception != null) {
-            listOf(FAILURE.tag)
+            Tags.of(FAILURE.tag)
         } else {
-            listOf(SUCCESS.tag)
+            Tags.of(SUCCESS.tag)
         }
     }
 
     override fun getFieldFetchTags(
-        state: DgsGraphQLMetricsInstrumentation.MetricsInstrumentationState,
         parameters: InstrumentationFieldFetchParameters,
         error: Throwable?
     ): Iterable<Tag> {
         return if (error == null) {
-            listOf(SUCCESS.tag)
+            Tags.of(SUCCESS.tag)
         } else {
-            listOf(FAILURE.tag)
+            Tags.of(FAILURE.tag)
         }
     }
 }

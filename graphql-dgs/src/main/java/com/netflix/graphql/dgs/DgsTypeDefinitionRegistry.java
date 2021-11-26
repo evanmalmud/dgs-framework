@@ -16,6 +16,8 @@
 
 package com.netflix.graphql.dgs;
 
+import graphql.schema.idl.TypeDefinitionRegistry;
+
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Inherited;
 import java.lang.annotation.Retention;

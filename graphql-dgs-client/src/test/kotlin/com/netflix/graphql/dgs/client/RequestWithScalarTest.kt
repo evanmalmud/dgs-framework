@@ -26,6 +26,7 @@ class RequestWithScalarTest {
 
     @Test
     fun `Creating a request with a date-time scalar as a variable should serialize correctly`() {
+
         val variables = mapOf(
             "currentDateTime" to DateRangeScalar().serialize(
                 DateRange(
@@ -34,19 +35,25 @@ class RequestWithScalarTest {
                 )
             )
         )
-        val client = CustomGraphQLClient(
-            url = "",
-            requestExecutor = { _, _, _ -> HttpResponse(200, """{"data": null}""") }
-        )
-        val graphQLResponse = client.executeQuery(
+        val graphQLResponse = DefaultGraphQLClient("").executeQuery(
             """
                    query Calendar(${'$'}timePeriod: DateRange) {
                      getMeetings(timePeriod: ${'$'}timePeriod)
                    }
             """.trimIndent(),
-            variables
+            variables, this::mockRequestHandler
         )
 
         assertThat(graphQLResponse).isNotNull
     }
+
+    private fun mockRequestHandler(url: String, headers: Map<String, List<String>>, body: String): HttpResponse =
+        HttpResponse(
+            200,
+            """
+            {
+                "data": null
+            }
+            """.trimIndent()
+        )
 }

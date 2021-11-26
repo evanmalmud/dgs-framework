@@ -16,8 +16,6 @@
 
 package com.netflix.graphql.dgs.client
 
-import com.fasterxml.jackson.annotation.JsonAnyGetter
-import com.fasterxml.jackson.annotation.JsonAnySetter
 import com.fasterxml.jackson.annotation.JsonEnumDefaultValue
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import com.fasterxml.jackson.annotation.JsonProperty
@@ -44,11 +42,10 @@ data class GraphQLErrorExtensions(
     @JsonProperty val classification: String = ""
 )
 
+@JsonIgnoreProperties(ignoreUnknown = true)
 data class GraphQLErrorDebugInfo(
     @JsonProperty val subquery: String = "",
-    @JsonProperty val variables: Map<String, Any> = emptyMap(),
-    @JsonAnySetter @get:JsonAnyGetter
-    val additionalInformation: Map<String, Any> = hashMapOf()
+    @JsonProperty val variables: Map<String, Any> = emptyMap()
 )
 
 /**
@@ -63,6 +60,7 @@ These are rough mappings intended to provide a quick explanation of the semantic
 @See https://docs.google.com/document/d/1FX5K0C1pyySayFmRt53FptUQ8vCf__y_WduaKT8HsbM
  */
 enum class ErrorType {
+    @JsonEnumDefaultValue
     /**
      Unknown error.
 
@@ -80,7 +78,6 @@ enum class ErrorType {
 
      HTTP Mapping: 520 Unknown Error
      */
-    @JsonEnumDefaultValue
     UNKNOWN,
 
     /**

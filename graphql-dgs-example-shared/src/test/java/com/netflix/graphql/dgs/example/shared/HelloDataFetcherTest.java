@@ -21,12 +21,6 @@ import com.netflix.graphql.dgs.exceptions.QueryException;
 import org.assertj.core.util.Maps;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.HttpHeaders;
-import org.springframework.mock.web.MockHttpServletRequest;
-
-import java.time.Duration;
-import java.time.LocalDateTime;
-import java.time.temporal.ChronoUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -46,12 +40,7 @@ class HelloDataFetcherTest {
 
     @Test
     void helloShouldIncludeNameWithVariables() {
-        String message = queryExecutor
-                .executeAndExtractJsonPath(
-                        "query Hello($name: String) { hello(name: $name)}",
-                        "data.hello",
-                        Maps.newHashMap("name", "DGS")
-                );
+        String message = queryExecutor.executeAndExtractJsonPath("query Hello($name: String) { hello(name: $name)}", "data.hello", Maps.newHashMap("name", "DGS"));
         assertThat(message).isEqualTo("hello, DGS!");
     }
 
@@ -62,23 +51,12 @@ class HelloDataFetcherTest {
     }
 
     @Test
-    void messageLoaderWithScheduledDispatch() {
-        LocalDateTime now = LocalDateTime.now();
-        String message = queryExecutor.executeAndExtractJsonPath("{ messageFromBatchLoaderWithScheduledDispatch }", "data.messageFromBatchLoaderWithScheduledDispatch");
-        LocalDateTime after = LocalDateTime.now();
-        assertThat( now.until(after, ChronoUnit.SECONDS)).isGreaterThanOrEqualTo(2);
-        assertThat( now.until(after, ChronoUnit.SECONDS)).isLessThanOrEqualTo(4);
-        assertThat(message).isEqualTo("hello, a!");
-    }
-
-    @Test
     void getQueryWithInspectError() {
         try {
             queryExecutor.executeAndExtractJsonPath("{greeting}", "data.greeting");
             fail("Exception should have been thrown");
         } catch (QueryException ex) {
-
-            assertThat(ex.getMessage()).contains("Validation error (FieldUndefined@[greeting]) : Field 'greeting' in type 'Query' is undefined");
+            assertThat(ex.getMessage()).contains("Validation error of type FieldUndefined: Field 'greeting' in type 'Query' is undefined @ 'greeting'");
             assertThat(ex.getErrors().size()).isEqualTo(1);
         }
     }

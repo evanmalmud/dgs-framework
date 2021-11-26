@@ -33,7 +33,7 @@ public class WithCookie {
     public String updateCookie(@InputArgument String value, DgsDataFetchingEnvironment dfe) {
         DgsWebMvcRequestData requestData = (DgsWebMvcRequestData) dfe.getDgsContext().getRequestData();
         ServletWebRequest webRequest = (ServletWebRequest) requestData.getWebRequest();
-        jakarta.servlet.http.Cookie cookie = new jakarta.servlet.http.Cookie("mydgscookie", value);
+        javax.servlet.http.Cookie cookie = new javax.servlet.http.Cookie("mydgscookie", value);
         webRequest.getResponse().addCookie(cookie);
 
         return value;

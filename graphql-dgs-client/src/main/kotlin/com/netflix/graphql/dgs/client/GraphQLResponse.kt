@@ -40,7 +40,7 @@ import org.slf4j.LoggerFactory
 data class GraphQLResponse(val json: String, val headers: Map<String, List<String>>) {
 
     /**
-     * A JsonPath DocumentContext. Typically, only used internally.
+     * A JsonPath DocumentContext. Typically only used internally.
      */
     val parsed: DocumentContext = JsonPath.using(jsonPathConfig).parse(json)
 
@@ -114,6 +114,8 @@ data class GraphQLResponse(val json: String, val headers: Map<String, List<Strin
         return extractValueAsObject("gatewayRequestDetails", RequestDetails::class.java)
     }
 
+    private fun getDataPath(path: String) = if (!path.startsWith("data")) "data.$path" else path
+
     fun hasErrors(): Boolean = errors.isNotEmpty()
 
     companion object {
@@ -129,14 +131,6 @@ data class GraphQLResponse(val json: String, val headers: Map<String, List<Strin
             .jsonProvider(JacksonJsonProvider(mapper))
             .mappingProvider(JacksonMappingProvider(mapper)).build()
             .addOptions(Option.DEFAULT_PATH_LEAF_TO_NULL)
-
-        fun getDataPath(path: String): String {
-            return if (path == "data" || path.startsWith("data.")) {
-                path
-            } else {
-                "data.$path"
-            }
-        }
     }
 }
 

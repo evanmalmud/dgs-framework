@@ -17,29 +17,31 @@
 package com.netflix.graphql.dgs
 
 import com.netflix.graphql.dgs.internal.DgsSchemaProvider
-import com.netflix.graphql.dgs.internal.method.MethodDataFetcherFactory
 import graphql.GraphQL
 import graphql.language.FieldDefinition
 import graphql.language.ObjectTypeExtensionDefinition
 import graphql.language.TypeName
 import graphql.schema.idl.TypeDefinitionRegistry
+import io.mockk.every
+import io.mockk.impl.annotations.MockK
+import io.mockk.junit5.MockKExtension
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
-import org.springframework.boot.test.context.runner.ApplicationContextRunner
-import java.util.Optional
-import kotlin.reflect.KClass
+import org.junit.jupiter.api.extension.ExtendWith
+import org.springframework.context.ApplicationContext
+import java.util.*
 
+@ExtendWith(MockKExtension::class)
 class DgsTypeRegistryDefinitionTest {
-
-    private val contextRunner = ApplicationContextRunner()
+    @MockK
+    lateinit var applicationContextMock: ApplicationContext
 
     /**
      * Note that there is an existing schema in resources/schema/schema.graphqls.
      */
     @Test
     fun `A TypeDefinitionRegistry should be able to merge with a file based schema`() {
-        @DgsComponent
-        class FetcherWithRegistry {
+        val typeRegistry = object : Any() {
             @DgsTypeDefinitionRegistry
             fun types(): TypeDefinitionRegistry {
                 val newRegistry = TypeDefinitionRegistry()
@@ -55,41 +57,35 @@ class DgsTypeRegistryDefinitionTest {
             }
         }
 
-        @DgsComponent
-        class Fetcher {
+        val queryFetcher = object : Any() {
             @DgsData(parentType = "Query", field = "dynamicField")
             fun dynamicField(): String {
                 return "hello from dgs"
             }
         }
 
-        contextRunner.withBeans(FetcherWithRegistry::class, Fetcher::class).run { context ->
-            val provider = DgsSchemaProvider(
-                applicationContext = context,
-                federationResolver = Optional.empty(),
-                existingTypeDefinitionRegistry = Optional.empty(),
-                methodDataFetcherFactory = MethodDataFetcherFactory(listOf())
-            )
+        val provider = DgsSchemaProvider(applicationContextMock, Optional.empty(), Optional.empty(), Optional.empty())
+        every { applicationContextMock.getBeansWithAnnotation(DgsComponent::class.java) } returns mapOf(Pair("queryResolver", queryFetcher), Pair("typeRegistry", typeRegistry))
+        every { applicationContextMock.getBeansWithAnnotation(DgsScalar::class.java) } returns emptyMap()
+        every { applicationContextMock.getBeansWithAnnotation(DgsDirective::class.java) } returns emptyMap()
 
-            val schema = provider.schema()
-            val graphql = GraphQL.newGraphQL(schema).build()
-            val result = graphql.execute(
-                """
+        val schema = provider.schema()
+        val graphql = GraphQL.newGraphQL(schema).build()
+        val result = graphql.execute(
+            """
             {
                 dynamicField
             }
-                """.trimIndent()
-            )
+            """.trimIndent()
+        )
 
-            val data = result.getData<Map<String, Any>>()
-            assertThat(data["dynamicField"]).isEqualTo("hello from dgs")
-        }
+        val data = result.getData<Map<String, Any>>()
+        assertThat(data["dynamicField"]).isEqualTo("hello from dgs")
     }
 
     @Test
     fun `Multiple TypeDefinitionRegistry methods should be able to merge`() {
-        @DgsComponent
-        class RegistryComponent {
+        val firstTypeDefinitionFactory = object : Any() {
             @DgsTypeDefinitionRegistry
             fun types(): TypeDefinitionRegistry {
                 val newRegistry = TypeDefinitionRegistry()
@@ -105,8 +101,7 @@ class DgsTypeRegistryDefinitionTest {
             }
         }
 
-        @DgsComponent
-        class AnotherRegistryComponent {
+        val secondTypeDefinitionFactory = object : Any() {
             @DgsTypeDefinitionRegistry
             fun types(): TypeDefinitionRegistry {
                 val newRegistry = TypeDefinitionRegistry()
@@ -122,52 +117,38 @@ class DgsTypeRegistryDefinitionTest {
             }
         }
 
-        @DgsComponent
-        class QueryFetcher {
+        val queryFetcher = object : Any() {
             @DgsData(parentType = "Query", field = "dynamicField")
             fun dynamicField(): String {
                 return "hello from dgs"
             }
         }
 
-        @DgsComponent
-        class NumberFetcher {
+        val numberFetcher = object : Any() {
             @DgsData(parentType = "Query", field = "number")
             fun dynamicField(): Int {
                 return 1
             }
         }
 
-        contextRunner.withBeans(RegistryComponent::class, AnotherRegistryComponent::class, QueryFetcher::class, NumberFetcher::class).run { context ->
-            val provider = DgsSchemaProvider(
-                applicationContext = context,
-                federationResolver = Optional.empty(),
-                existingTypeDefinitionRegistry = Optional.empty(),
-                methodDataFetcherFactory = MethodDataFetcherFactory(listOf())
-            )
+        val provider = DgsSchemaProvider(applicationContextMock, Optional.empty(), Optional.empty(), Optional.empty())
+        every { applicationContextMock.getBeansWithAnnotation(DgsComponent::class.java) } returns mapOf(Pair("queryResolver", queryFetcher), Pair("numberResolver", numberFetcher), Pair("typeRegistry", firstTypeDefinitionFactory), Pair("secondRegistry", secondTypeDefinitionFactory))
+        every { applicationContextMock.getBeansWithAnnotation(DgsScalar::class.java) } returns emptyMap()
+        every { applicationContextMock.getBeansWithAnnotation(DgsDirective::class.java) } returns emptyMap()
 
-            val schema = provider.schema()
-            val graphql = GraphQL.newGraphQL(schema).build()
-            val result = graphql.execute(
-                """
+        val schema = provider.schema()
+        val graphql = GraphQL.newGraphQL(schema).build()
+        val result = graphql.execute(
+            """
             {
                 dynamicField
                 number
             }
-                """.trimIndent()
-            )
+            """.trimIndent()
+        )
 
-            val data = result.getData<Map<String, Any>>()
-            assertThat(data["dynamicField"]).isEqualTo("hello from dgs")
-            assertThat(data["number"]).isEqualTo(1)
-        }
-    }
-
-    private fun ApplicationContextRunner.withBeans(vararg beanClasses: KClass<*>): ApplicationContextRunner {
-        var context = this
-        for (klazz in beanClasses) {
-            context = context.withBean(klazz.java)
-        }
-        return context
+        val data = result.getData<Map<String, Any>>()
+        assertThat(data["dynamicField"]).isEqualTo("hello from dgs")
+        assertThat(data["number"]).isEqualTo(1)
     }
 }

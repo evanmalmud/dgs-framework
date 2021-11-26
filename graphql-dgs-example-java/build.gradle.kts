@@ -18,7 +18,6 @@ dependencies {
     implementation(project(":graphql-dgs-example-shared"))
     implementation(project(":graphql-dgs-spring-boot-starter"))
     implementation(project(":graphql-dgs-pagination"))
-    implementation(project(":graphql-dgs-extended-scalars"))
     implementation(project(":graphql-dgs-subscriptions-websockets-autoconfigure"))
     implementation("org.springframework.boot:spring-boot-starter-web")
     implementation("io.projectreactor:reactor-core")
@@ -26,15 +25,12 @@ dependencies {
     // please review the Spring Boot Docs in the link below for additional information.
     // https://docs.spring.io/spring-boot/docs/current/reference/html/production-ready-features.html#production-ready-metrics-export-simple
     implementation("org.springframework.boot:spring-boot-starter-actuator")
-
     // Adding the DGS Micrometer integration that provides timers for gql.*
     // For additional information go to the link below:
     // https://netflix.github.io/dgs/advanced/instrumentation/
-    implementation(project(":graphql-dgs-spring-boot-micrometer"))
 
     implementation("com.github.ben-manes.caffeine:caffeine")
     testImplementation(project(":graphql-dgs-client"))
     testImplementation("org.springframework.boot:spring-boot-starter-webflux")
     testImplementation("io.projectreactor:reactor-test")
-    testImplementation(project(mapOf("path" to ":graphql-dgs-example-shared")))
 }

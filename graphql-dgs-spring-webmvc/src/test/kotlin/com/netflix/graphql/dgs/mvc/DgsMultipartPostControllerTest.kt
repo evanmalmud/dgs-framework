@@ -16,85 +16,35 @@
 
 package com.netflix.graphql.dgs.mvc
 
-import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.netflix.graphql.dgs.DgsQueryExecutor
 import graphql.ExecutionResultImpl
-import org.intellij.lang.annotations.Language
+import io.mockk.every
+import io.mockk.impl.annotations.MockK
+import io.mockk.junit5.MockKExtension
+import org.assertj.core.api.Assertions.assertThat
+import org.assertj.core.util.Lists
+import org.assertj.core.util.Maps
+import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test
-import org.mockito.ArgumentMatchers.any
-import org.mockito.ArgumentMatchers.argThat
-import org.mockito.ArgumentMatchers.eq
-import org.mockito.Mockito.`when`
-import org.springframework.beans.factory.annotation.Autowired
-import org.springframework.boot.autoconfigure.SpringBootApplication
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest
-import org.springframework.boot.test.mock.mockito.MockBean
+import org.junit.jupiter.api.extension.ExtendWith
+import org.springframework.http.HttpHeaders
+import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
 import org.springframework.mock.web.MockMultipartFile
-import org.springframework.test.web.servlet.MockMvc
-import org.springframework.test.web.servlet.multipart
+import org.springframework.web.context.request.WebRequest
 import org.springframework.web.multipart.MultipartFile
 
-@WebMvcTest(DgsRestController::class)
+@ExtendWith(MockKExtension::class)
 class DgsMultipartPostControllerTest {
-
-    @SpringBootApplication
-    open class App
-
-    @MockBean
+    @MockK
     lateinit var dgsQueryExecutor: DgsQueryExecutor
 
-    @Autowired
-    lateinit var objectMapper: ObjectMapper
-
-    @Autowired
-    lateinit var mvc: MockMvc
-
-    @Test
-    fun `Multipart form request should require a preflight header`() {
-        val queryString = "mutation(\$file: Upload!) {uploadFile(file: \$file)}"
-
-        @Language("JSON")
-        val operation = """
-            { 
-                "query": "$queryString",
-                "variables": { 
-                    "file": null
-                }
-            }
-        """.trimIndent()
-
-        @Language("JSON")
-        val varParameters = """{"0": ["variables.file"]}"""
-
-        val file1 = MockMultipartFile("foo", "foo.txt", MediaType.TEXT_PLAIN_VALUE, "Hello World".toByteArray())
-
-        `when`(
-            dgsQueryExecutor.execute(
-                eq(queryString),
-                any(),
-                any(),
-                any(),
-                any(),
-                any()
-            )
-        ).thenReturn(
-            ExecutionResultImpl.newExecutionResult().data(mapOf("Response" to "success")).build()
-        )
-
-        mvc.multipart("/graphql") {
-            contentType = MediaType.MULTIPART_FORM_DATA
-            param("operations", operation)
-            param("map", varParameters)
-            file(file1)
-        }.andExpect {
-            status { is4xxClientError() }
-        }
-    }
+    @MockK
+    lateinit var webRequest: WebRequest
 
     @Test
     fun singleFileUpload() {
-        @Language("JSON")
         val operation = """
             { 
                 "query": "mutation(${'$'}file: Upload!) {uploadFile(file: ${'$'}file)}",
@@ -104,213 +54,153 @@ class DgsMultipartPostControllerTest {
             }
         """.trimIndent()
 
-        @Language("JSON")
-        val varParameters = """{"foo": ["variables.file"]}"""
-
-        val queryString = "mutation(\$file: Upload!) {uploadFile(file: \$file)}"
-
-        `when`(
-            dgsQueryExecutor.execute(
-                eq(queryString),
-                argThat { variables -> variables["file"] is MultipartFile },
-                any(),
-                any(),
-                any(),
-                any()
-            )
-        ).thenReturn(
-            ExecutionResultImpl.newExecutionResult().data(mapOf("Response" to "success")).build()
-        )
-
-        mvc.multipart("/graphql") {
-            contentType = MediaType.MULTIPART_FORM_DATA
-            header(GraphQLCSRFRequestHeaderValidationRule.HEADER_GRAPHQL_REQUIRE_PREFLIGHT, "true")
-            param("operations", operation)
-            param("map", varParameters)
-            file("foo", "Hello world".toByteArray())
-        }.andExpect {
-            status { isOk() }
-            jsonPath("errors") {
-                doesNotExist()
+        val map = """
+            { 
+                "0": ["variables.file"]
             }
-            jsonPath("data") {
-                isMap()
-            }
-            jsonPath("data.Response") {
-                value("success")
-            }
-        }
+        """.trimIndent()
+
+        val file1: MultipartFile = MockMultipartFile("foo", "foo.txt", MediaType.TEXT_PLAIN_VALUE, "Hello World".toByteArray())
+
+        val queryString = "mutation(${'$'}file: Upload!) {uploadFile(file: ${'$'}file)}"
+        val variablesMap: MutableMap<String, Any> = Maps.newHashMap("file", file1)
+
+        every { dgsQueryExecutor.execute(queryString, variablesMap, any(), any(), any(), any()) } returns ExecutionResultImpl.newExecutionResult().data(mapOf(Pair("Response", "success"))).build()
+
+        val result = DgsRestController(dgsQueryExecutor).graphql(null, Maps.newHashMap("0", file1), operation, map, HttpHeaders(), webRequest)
+
+        val mapper = jacksonObjectMapper()
+        val (data, errors) = mapper.readValue(result.body, GraphQLResponse::class.java)
+        assertThat(errors.size).isEqualTo(0)
+        assertThat(data["Response"]).isEqualTo("success")
     }
 
     @Test
     fun multipleFileUpload() {
-        @Language("JSON")
         val operation = """
-            {
+            { 
                 "query": "mutation(${'$'}input: FileUploadInput!) {uploadFile(input: ${'$'}input)}",
-                "variables": {
-                    "input": {
-                        "description": "test",
-                        "files": [null, null]
-                    }
+                "variables": { 
+                    "input": { 
+                        "description": "test", 
+                        "files": [null, null] 
+                    } 
                 }
             }
         """.trimIndent()
 
-        @Language("JSON")
-        val varParameters = """{"0": ["variables.input.files.0"], "1": ["variables.input.files.1"]}"""
-
-        val queryString = "mutation(\$input: FileUploadInput!) {uploadFile(input: \$input)}"
-
-        `when`(
-            dgsQueryExecutor.execute(
-                eq(queryString),
-                argThat { variables ->
-                    val input = variables["input"] as Map<*, *>
-                    val files = input["files"]
-                    files is List<*> && files.size == 2 && files.all { it is MultipartFile }
-                },
-                any(),
-                any(),
-                any(),
-                any()
-            )
-        ).thenReturn(
-            ExecutionResultImpl.newExecutionResult().data(mapOf("Response" to "success")).build()
-        )
-
-        mvc.multipart("/graphql") {
-            contentType = MediaType.MULTIPART_FORM_DATA
-            header(GraphQLCSRFRequestHeaderValidationRule.HEADER_GRAPHQL_REQUIRE_PREFLIGHT, "true")
-            param("operations", operation)
-            param("map", varParameters)
-            file("0", "Hello world".toByteArray())
-            file("1", "This is an example".toByteArray())
-        }.andExpect {
-            status { isOk() }
-            jsonPath("errors") {
-                doesNotExist()
+        val map = """
+            { 
+                "0": ["variables.input.files.0"], 
+                "1": ["variables.input.files.1"] 
             }
-            jsonPath("data") {
-                isMap()
-            }
-            jsonPath("data.Response") {
-                value("success")
-            }
-        }
+        """.trimIndent()
+
+        val file1: MultipartFile = MockMultipartFile("foo", "foo.txt", MediaType.TEXT_PLAIN_VALUE, "Hello World".toByteArray())
+        val file2: MultipartFile = MockMultipartFile("example", "example.txt", MediaType.TEXT_PLAIN_VALUE, "This is an example".toByteArray())
+
+        val queryString = "mutation(${'$'}input: FileUploadInput!) {uploadFile(input: ${'$'}input)}"
+        val queryInputMap = Maps.newHashMap<String, Any>("description", "test")
+        queryInputMap["files"] = Lists.newArrayList(file1, file2)
+
+        every { dgsQueryExecutor.execute(queryString, mapOf("input" to queryInputMap), any(), any(), any(), any()) } returns ExecutionResultImpl.newExecutionResult().data(mapOf(Pair("Response", "success"))).build()
+
+        val result = DgsRestController(dgsQueryExecutor).graphql(null, mapOf("0" to file1, "1" to file2), operation, map, HttpHeaders(), webRequest)
+
+        val mapper = jacksonObjectMapper()
+        val (data, errors) = mapper.readValue(result.body, GraphQLResponse::class.java)
+        assertThat(errors.size).isEqualTo(0)
+        assertThat(data["Response"]).isEqualTo("success")
     }
 
     @Test
     fun arrayOfFilesUpload() {
-        @Language("JSON")
         val operation = """
-            {
+            { 
                 "query": "mutation(${'$'}files: [Upload!]!) {uploadFile(files: ${'$'}files)}",
-                "variables": {
+                "variables": { 
                     "files": [null, null]
                 }
             }
         """.trimIndent()
 
-        @Language("JSON")
-        val varParameters = """{"0": ["variables.files.0"], "1": ["variables.files.1"]}"""
-
-        val queryString = "mutation(\$files: [Upload!]!) {uploadFile(files: \$files)}"
-
-        `when`(
-            dgsQueryExecutor.execute(
-                eq(queryString),
-                argThat { variables ->
-                    val files = variables["files"]
-                    files is List<*> && files.size == 2 && files.all { it is MultipartFile }
-                },
-                any(),
-                any(),
-                any(),
-                any()
-            )
-        ).thenReturn(
-            ExecutionResultImpl.newExecutionResult().data(mapOf("Response" to "success")).build()
-        )
-
-        mvc.multipart("/graphql") {
-            contentType = MediaType.MULTIPART_FORM_DATA
-            header(GraphQLCSRFRequestHeaderValidationRule.HEADER_GRAPHQL_REQUIRE_PREFLIGHT, "true")
-            param("operations", operation)
-            param("map", varParameters)
-            file("0", "Hello world".toByteArray())
-            file("1", "This is an example".toByteArray())
-        }.andExpect {
-            status { isOk() }
-            jsonPath("errors") {
-                doesNotExist()
+        val map = """
+            { 
+                "0": ["variables.files.0"], 
+                "1": ["variables.files.1"]
             }
-            jsonPath("data") {
-                isMap()
-            }
-            jsonPath("data.Response") {
-                value("success")
-            }
-        }
+        """.trimIndent()
+
+        val file1: MultipartFile = MockMultipartFile("foo", "foo.txt", MediaType.TEXT_PLAIN_VALUE, "Hello World".toByteArray())
+        val file2: MultipartFile = MockMultipartFile("example", "example.txt", MediaType.TEXT_PLAIN_VALUE, "This is an example".toByteArray())
+
+        val queryString = "mutation(${'$'}files: [Upload!]!) {uploadFile(files: ${'$'}files)}"
+        val variablesMap: MutableMap<String, Any> = Maps.newHashMap("files", Lists.newArrayList(file1, file2))
+
+        every { dgsQueryExecutor.execute(queryString, variablesMap, any(), any(), any(), any()) } returns ExecutionResultImpl.newExecutionResult().data(mapOf(Pair("Response", "success"))).build()
+
+        val result = DgsRestController(dgsQueryExecutor).graphql(null, mapOf("0" to file1, "1" to file2), operation, map, HttpHeaders(), webRequest)
+
+        val mapper = jacksonObjectMapper()
+        val (data, errors) = mapper.readValue(result.body, GraphQLResponse::class.java)
+        assertThat(errors.size).isEqualTo(0)
+        assertThat(data["Response"]).isEqualTo("success")
     }
 
     @Test
     fun incorrectFileUploadWithMissingParts() {
-        // Missing operations param
-        mvc.multipart("/graphql") {
-            contentType = MediaType.MULTIPART_FORM_DATA
-            header(GraphQLCSRFRequestHeaderValidationRule.HEADER_GRAPHQL_REQUIRE_PREFLIGHT, "true")
-            param("map", """{"0": ["variables.file"]}""")
-            file("0", "Hello world".toByteArray())
-        }.andExpect {
-            status { is4xxClientError() }
-        }
-
-        @Language("JSON")
         val operation = """
-            {
-                "query": "mutation(${'$'}files: [Upload!]!) {uploadFile(files: ${'$'}files)}",
-                "variables": {
-                    "files": [null, null]
+            { 
+                "query": "mutation(${'$'}file: Upload!) {uploadFile(file: ${'$'}file)}",
+                "variables": { 
+                    "file": null
                 }
             }
         """.trimIndent()
 
-        // Missing map param
-        mvc.multipart("/graphql") {
-            contentType = MediaType.MULTIPART_FORM_DATA
-            header(GraphQLCSRFRequestHeaderValidationRule.HEADER_GRAPHQL_REQUIRE_PREFLIGHT, "true")
-            param("operations", operation)
-            file("0", "Hello world".toByteArray())
-        }.andExpect {
-            status { is4xxClientError() }
-        }
+        val map = """
+            { 
+                "0": ["variables.file"]
+            }
+        """.trimIndent()
+
+        val file: MultipartFile = MockMultipartFile("foo", "foo.txt", MediaType.TEXT_PLAIN_VALUE, "Hello World".toByteArray())
+
+        // missing operation part
+        var responseEntity = DgsRestController(dgsQueryExecutor).graphql(null, mapOf("0" to file), null, map, HttpHeaders(), webRequest)
+        assertThat(responseEntity.statusCode).isEqualTo(HttpStatus.BAD_REQUEST)
+
+        // missing file parts
+        responseEntity = DgsRestController(dgsQueryExecutor).graphql(null, null, operation, map, HttpHeaders(), webRequest)
+        assertThat(responseEntity.statusCode).isEqualTo(HttpStatus.BAD_REQUEST)
+
+        // missing mapped object paths part
+        responseEntity = DgsRestController(dgsQueryExecutor).graphql(null, mapOf("0" to file), operation, null, HttpHeaders(), webRequest)
+        assertThat(responseEntity.statusCode).isEqualTo(HttpStatus.BAD_REQUEST)
     }
 
     @Test
     fun malformedFileUploadWithIncorrectMappedPath() {
-        @Language("JSON")
         val operation = """
-            {
+            { 
                 "query": "mutation(${'$'}file: Upload!) {uploadFile(file: ${'$'}file)}",
-                "variables": {
+                "variables": { 
                     "file": null
                 }
             }
         """.trimIndent()
 
         // set up incorrect object mapping path
-        @Language("JSON")
-        val varParameters = """{"0": ["variables.file.0"]}"""
+        val map = """
+            { 
+                "0": ["variables.file.0"]
+            }
+        """.trimIndent()
 
-        mvc.multipart("/graphql") {
-            contentType = MediaType.MULTIPART_FORM_DATA
-            header(GraphQLCSRFRequestHeaderValidationRule.HEADER_GRAPHQL_REQUIRE_PREFLIGHT, "true")
-            param("operations", operation)
-            param("map", varParameters)
-            file("0", "Hello world".toByteArray())
-        }.andExpect {
-            status { is4xxClientError() }
+        val file: MultipartFile = MockMultipartFile("foo", "foo.txt", MediaType.TEXT_PLAIN_VALUE, "Hello World".toByteArray())
+
+        assertThrows(RuntimeException::class.java) {
+            DgsRestController(dgsQueryExecutor).graphql(null, mapOf("0" to file), operation, map, HttpHeaders(), webRequest)
         }
     }
 }

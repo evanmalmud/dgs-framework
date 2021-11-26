@@ -23,9 +23,6 @@ dependencies {
     implementation("org.springframework:spring-websocket")
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
 
-    compileOnly("jakarta.annotation:jakarta.annotation-api")
-    compileOnly("org.springframework.security:spring-security-core")
-
     testImplementation("io.projectreactor:reactor-core")
     testImplementation("io.projectreactor.kotlin:reactor-kotlin-extensions")
 }

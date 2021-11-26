@@ -28,6 +28,7 @@ import graphql.schema.idl.SchemaDirectiveWiringEnvironment
 class WordFilterDirective : SchemaDirectiveWiring {
 
     override fun onField(env: SchemaDirectiveWiringEnvironment<GraphQLFieldDefinition>): GraphQLFieldDefinition {
+
         val field = env.element
         val parentType = env.fieldsContainer
 

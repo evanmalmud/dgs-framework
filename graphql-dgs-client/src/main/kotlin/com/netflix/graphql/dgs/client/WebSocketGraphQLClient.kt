@@ -20,8 +20,6 @@ import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.fasterxml.jackson.module.kotlin.jacksonTypeRef
 import com.netflix.graphql.types.subscription.*
 import graphql.GraphQLException
-import org.intellij.lang.annotations.Language
-import org.springframework.web.reactive.socket.WebSocketHandler
 import org.springframework.web.reactive.socket.WebSocketMessage
 import org.springframework.web.reactive.socket.WebSocketSession
 import org.springframework.web.reactive.socket.client.ReactorNettyWebSocketClient
@@ -80,24 +78,23 @@ class WebSocketGraphQLClient(
     //       next release of reactors (v3.4.8: https://github.com/reactor/reactor-core/releases/tag/v3.4.8)
     private val connection = AtomicReference<Disposable?>(null)
     private val handshake = Mono.defer {
-        if (connectionIsStale()) {
+        if (connectionIsStale())
             doHandshake()
-        } else {
+        else
             Mono.empty()
-        }
     }
 
     override fun reactiveExecuteQuery(
-        @Language("graphql") query: String,
-        variables: Map<String, Any>
+        query: String,
+        variables: Map<String, Any>,
     ): Flux<GraphQLResponse> {
         return reactiveExecuteQuery(query, variables, null)
     }
 
     override fun reactiveExecuteQuery(
-        @Language("graphql") query: String,
+        query: String,
         variables: Map<String, Any>,
-        operationName: String?
+        operationName: String?,
     ): Flux<GraphQLResponse> {
         // Generate a unique number for each subscription in the same session.
         val subscriptionId = subscriptionCount
@@ -133,11 +130,10 @@ class WebSocketGraphQLClient(
             client.receive()
                 .take(1)
                 .map { message ->
-                    if (message.type == GQL_CONNECTION_ACK) {
+                    if (message.type == GQL_CONNECTION_ACK)
                         message
-                    } else {
+                    else
                         throw GraphQLException("Acknowledgement expected from server, received $message")
-                    }
                 }
                 .timeout(acknowledgementTimeout)
                 .then()
@@ -208,20 +204,7 @@ class OperationMessageWebSocketClient(
         .onBackpressureBuffer<GraphQLException>(Queues.SMALL_BUFFER_SIZE, false)
 
     fun connect(): Mono<Void> {
-        return Mono.defer {
-            client.execute(
-                URI(url),
-                object : WebSocketHandler {
-                    override fun handle(session: WebSocketSession): Mono<Void> {
-                        return exchange(session)
-                    }
-
-                    override fun getSubProtocols(): List<String> {
-                        return listOf(GRAPHQL_SUBSCRIPTIONS_WS_PROTOCOL)
-                    }
-                }
-            )
-        }
+        return Mono.defer { client.execute(URI(url), this::exchange) }
     }
 
     /**
@@ -274,6 +257,7 @@ class OperationMessageWebSocketClient(
         session: WebSocketSession,
         message: OperationMessage
     ): WebSocketMessage {
+
         return session.textMessage(MAPPER.writeValueAsString(message))
     }
 

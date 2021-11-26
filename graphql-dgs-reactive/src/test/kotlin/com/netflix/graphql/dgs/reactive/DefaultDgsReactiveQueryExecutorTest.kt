@@ -26,12 +26,11 @@ import com.netflix.graphql.dgs.exceptions.DgsQueryExecutionDataExtractionExcepti
 import com.netflix.graphql.dgs.exceptions.QueryException
 import com.netflix.graphql.dgs.internal.DgsDataLoaderProvider
 import com.netflix.graphql.dgs.internal.DgsSchemaProvider
-import com.netflix.graphql.dgs.internal.method.MethodDataFetcherFactory
 import com.netflix.graphql.dgs.reactive.internal.DefaultDgsReactiveGraphQLContextBuilder
 import com.netflix.graphql.dgs.reactive.internal.DefaultDgsReactiveQueryExecutor
 import graphql.execution.AsyncExecutionStrategy
 import graphql.execution.AsyncSerialExecutionStrategy
-import graphql.execution.instrumentation.SimplePerformantInstrumentation
+import graphql.execution.instrumentation.ChainedInstrumentation
 import io.mockk.every
 import io.mockk.impl.annotations.MockK
 import io.mockk.junit5.MockKExtension
@@ -58,6 +57,7 @@ internal class DefaultDgsReactiveQueryExecutorTest {
 
     @BeforeEach
     fun createExecutor() {
+
         val fetcher = object : Any() {
             @DgsData(parentType = "Query", field = "hello")
             fun hello(): String {
@@ -109,7 +109,7 @@ internal class DefaultDgsReactiveQueryExecutorTest {
             federationResolver = Optional.empty(),
             dataFetcherExceptionHandler = Optional.empty(),
             existingTypeDefinitionRegistry = Optional.empty(),
-            methodDataFetcherFactory = MethodDataFetcherFactory(listOf())
+            mockProviders = Optional.empty()
         )
 
         val schema = provider.schema(
@@ -135,14 +135,11 @@ internal class DefaultDgsReactiveQueryExecutorTest {
         )
 
         dgsQueryExecutor = DefaultDgsReactiveQueryExecutor(
-            defaultSchema = schema,
-            schemaProvider = provider,
-            dataLoaderProvider = dgsDataLoaderProvider,
-            contextBuilder = DefaultDgsReactiveGraphQLContextBuilder(Optional.empty()),
-            instrumentation = SimplePerformantInstrumentation.INSTANCE,
-            queryExecutionStrategy = AsyncExecutionStrategy(),
-            mutationExecutionStrategy = AsyncSerialExecutionStrategy(),
-            idProvider = Optional.empty()
+            schema, provider, dgsDataLoaderProvider,
+            DefaultDgsReactiveGraphQLContextBuilder(
+                Optional.empty()
+            ),
+            ChainedInstrumentation(), AsyncExecutionStrategy(), AsyncSerialExecutionStrategy(), Optional.empty()
         )
     }
 
@@ -221,8 +218,7 @@ internal class DefaultDgsReactiveQueryExecutorTest {
                 movies { title releaseDate }
             }
             """.trimIndent(),
-            "data.movies[0]",
-            Movie::class.java
+            "data.movies[0]", Movie::class.java
         )
 
         StepVerifier.create(movie).assertNext {
@@ -239,8 +235,7 @@ internal class DefaultDgsReactiveQueryExecutorTest {
                 movies { title releaseDate }
             }
             """.trimIndent(),
-            "data.movies",
-            object : TypeRef<List<Movie>>() {}
+            "data.movies", object : TypeRef<List<Movie>>() {}
         )
 
         StepVerifier.create(person).assertNext {
@@ -265,14 +260,14 @@ internal class DefaultDgsReactiveQueryExecutorTest {
 
     @Test
     fun extractJsonAsObjectError() {
+
         val withError = dgsQueryExecutor.executeAndExtractJsonPathAsObject(
             """
             {
                 movies { title }
             }
             """.trimIndent(),
-            "data.movies[0]",
-            String::class.java
+            "data.movies[0]", String::class.java
         )
 
         StepVerifier.create(withError).consumeErrorWith {
@@ -296,8 +291,7 @@ internal class DefaultDgsReactiveQueryExecutorTest {
                 movies { title }
             }
             """.trimIndent(),
-            "data.movies[0]",
-            object : TypeRef<List<String>>() {}
+            "data.movies[0]", object : TypeRef<List<String>>() {}
         )
 
         StepVerifier.create(withError).consumeErrorWith {

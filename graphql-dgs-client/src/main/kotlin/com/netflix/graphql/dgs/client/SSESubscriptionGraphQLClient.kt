@@ -18,29 +18,26 @@ package com.netflix.graphql.dgs.client
 
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.netflix.graphql.types.subscription.QueryPayload
-import org.intellij.lang.annotations.Language
 import org.springframework.http.MediaType
 import org.springframework.web.reactive.function.client.WebClient
-import org.springframework.web.reactive.function.client.toEntityFlux
+import org.springframework.web.reactive.function.client.WebClientResponseException
+import org.springframework.web.reactive.function.client.bodyToFlux
 import reactor.core.publisher.Flux
 import reactor.core.scheduler.Schedulers
+import java.nio.charset.Charset
 import java.nio.charset.StandardCharsets
 import java.util.*
 
-/*
- * This client can be used for servers which are following the subscriptions-transport-sse specification, which can be found here:
- * https://github.com/CodeCommission/subscriptions-transport-sse
- */
 class SSESubscriptionGraphQLClient(private val url: String, private val webClient: WebClient) : ReactiveGraphQLClient {
 
     private val mapper = jacksonObjectMapper()
 
-    override fun reactiveExecuteQuery(@Language("graphql") query: String, variables: Map<String, Any>): Flux<GraphQLResponse> {
+    override fun reactiveExecuteQuery(query: String, variables: Map<String, Any>): Flux<GraphQLResponse> {
         return reactiveExecuteQuery(query, variables, null)
     }
 
     override fun reactiveExecuteQuery(
-        @Language("graphql") query: String,
+        query: String,
         variables: Map<String, Any>,
         operationName: String?
     ): Flux<GraphQLResponse> {
@@ -51,17 +48,22 @@ class SSESubscriptionGraphQLClient(private val url: String, private val webClien
         return webClient.get()
             .uri("$url?query={query}", mapOf("query" to encodeQuery(jsonPayload)))
             .accept(MediaType.TEXT_EVENT_STREAM)
-            .retrieve()
-            .toEntityFlux<String>()
-            .flatMapMany { response ->
-                val headers = response.headers
-                response.body?.map { body -> GraphQLResponse(json = body, headers = headers) }
-                    ?: Flux.empty()
+            .exchange()
+            .flatMapMany { r ->
+                if (r.statusCode().is2xxSuccessful) {
+                    r.bodyToFlux<String>().map { GraphQLResponse(it, r.headers().asHttpHeaders()) }.onBackpressureBuffer()
+                } else {
+                    if (r.statusCode().is4xxClientError || r.statusCode().is3xxRedirection) {
+                        throw WebClientResponseException.create(r.rawStatusCode(), r.toString(), r.headers().asHttpHeaders(), byteArrayOf(), Charset.defaultCharset())
+                    } else {
+                        r.bodyToFlux<String>().map { throw WebClientResponseException.create(r.rawStatusCode(), r.toString(), r.headers().asHttpHeaders(), it.toByteArray(), Charset.defaultCharset()) }
+                    }
+                }
             }
             .publishOn(Schedulers.single())
     }
 
-    private fun encodeQuery(@Language("graphql") query: String): String? {
+    private fun encodeQuery(query: String): String? {
         return Base64.getEncoder().encodeToString(query.toByteArray(StandardCharsets.UTF_8))
     }
 }

@@ -23,7 +23,7 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.function.Function
 
 /** [LimitedTagMetricResolver] backed by Spectator's Cardinality Limiters. */
-class SpectatorLimitedTagMetricResolver(
+internal class SpectatorLimitedTagMetricResolver(
     private val tagsProperties: DgsGraphQLMetricsProperties.TagsProperties
 ) : LimitedTagMetricResolver {
 

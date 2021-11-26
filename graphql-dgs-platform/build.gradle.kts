@@ -40,54 +40,29 @@ rootProject.subprojects
         evaluationDependsOn(it.path)
     }
 
-
 dependencies {
     // The following constraints leverage the _rich versioning_ exposed by Gradle,
     // this will be published as Maven Metadata.
     // For more information at https://docs.gradle.org/current/userguide/rich_versions.html
     constraints {
-        // GraphQL Platform
         api("com.graphql-java:graphql-java") {
-            version {
-                strictly("[20.6]")
-                prefer("20.6")
-                reject("[19.5, 18.2]")
-            }
-
+            version { require(Versions.GRAPHQL_JAVA) }
         }
         api("com.graphql-java:graphql-java-extended-scalars") {
-            version {
-                 strictly("[19.1, 20.2]")
-                 prefer("20.2")
-                 reject("18.2")
-            }
-        }
-        api("com.graphql-java:graphql-java-extended-validation") {
-            version { strictly("20.0") }
+            version { require(Versions.GRAPHQL_JAVA_EXTENDED_SCALARS) }
         }
         api("com.apollographql.federation:federation-graphql-java-support") {
-            version {
-                strictly("[3.0.0]")
-                prefer("3.0.0")
-            }
+            version { require(Versions.GRAPHQL_JAVA_FEDERATION) }
         }
-        // ---
         api("com.jayway.jsonpath:json-path") {
-            version { require("2.7.0") }
+            version { require("2.6.0") }
         }
         api("io.projectreactor:reactor-core") {
-            version { require("3.4.22") }
+            version { require("3.4.10") }
         }
         api("io.projectreactor:reactor-test"){
-            version { require("3.4.22") }
+            version { require("3.4.10") }
         }
-        // CVEs
-        api("org.apache.logging.log4j:log4j-to-slf4j:2.20.0") {
-            because("Refer to CVE-2021-44228; https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2021-44228")
-         }
-         api("org.apache.logging.log4j:log4j-api:2.20.0") {
-            because("Refer to CVE-2021-44228; https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2021-44228")
-         }
     }
 }
 
@@ -112,8 +87,9 @@ afterEvaluate {
     project.dependencies {
         constraints {
             subprojectRecommendations.forEach {
-                logger.info("Adding {} as constraint.", it)
+                logger.info("Adding ${it} as constraint.")
                 api(it)
+
             }
         }
     }

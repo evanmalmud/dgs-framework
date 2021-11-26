@@ -18,7 +18,5 @@ dependencies {
     api("com.graphql-java:graphql-java")
     api("com.fasterxml.jackson.core:jackson-annotations")
 
-    implementation("org.springframework:spring-websocket")
-
     testImplementation("com.fasterxml.jackson.module:jackson-module-kotlin")
 }

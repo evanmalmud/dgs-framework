@@ -33,8 +33,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
-import static com.netflix.graphql.dgs.example.shared.context.ExampleGraphQLContextContributor.CONTRIBUTOR_ENABLED_CONTEXT_KEY;
-
 @DgsComponent
 public class HelloDataFetcher {
     @DgsQuery
@@ -47,18 +45,15 @@ public class HelloDataFetcher {
         return "hello, " + name + "!";
     }
 
+    @DgsQuery
+    public String helloWithHeaders(@InputArgument String name, @RequestHeader(HttpHeaders.AUTHORIZATION) String authorization) {
+        return "hello, " + authorization + "!";
+    }
+
     @DgsData(parentType = "Query", field = "messageFromBatchLoader")
     public CompletableFuture<String> getMessage(DataFetchingEnvironment env) {
         DataLoader<String, String> dataLoader = env.getDataLoader("messages");
         return dataLoader.load("a");
-    }
-
-    @DgsData(parentType = "Query", field = "messageFromBatchLoaderWithScheduledDispatch")
-    public CompletableFuture<String> getMessageScheduled(DataFetchingEnvironment env) {
-        DataLoader<String, String> dataLoader = env.getDataLoader("messagesWithScheduledDispatch");
-        CompletableFuture res =  dataLoader.load("a");
-
-        return res;
     }
 
     @DgsData(parentType = "Query", field = "messagesWithExceptionFromBatchLoader")
@@ -88,13 +83,6 @@ public class HelloDataFetcher {
     public CompletableFuture<String> withDataLoaderContext(DataFetchingEnvironment dfe) {
         DataLoader<String, String> exampleLoaderWithContext = dfe.getDataLoader("exampleLoaderWithContext");
         return exampleLoaderWithContext.load("A");
-    }
-
-    @DgsData(parentType = "Query", field = "withDataLoaderGraphQLContext")
-    @DgsEnableDataFetcherInstrumentation
-    public CompletableFuture<String> withDataLoaderGraphQLContext(DataFetchingEnvironment dfe) {
-        DataLoader<String, String> exampleLoaderWithContext = dfe.getDataLoader("exampleLoaderWithGraphQLContext");
-        return exampleLoaderWithContext.load(CONTRIBUTOR_ENABLED_CONTEXT_KEY);
     }
 
     @DgsData(parentType = "Query", field = "withGraphqlException")

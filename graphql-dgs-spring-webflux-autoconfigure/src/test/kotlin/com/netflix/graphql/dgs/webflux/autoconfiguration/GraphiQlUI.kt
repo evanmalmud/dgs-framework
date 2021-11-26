@@ -42,15 +42,4 @@ class GraphiQlUI {
         webTestClient.get().uri("/graphiql").exchange()
             .expectStatus().isPermanentRedirect
     }
-
-    @Test
-    fun `graphiql title should be default`() {
-        webTestClient.get().uri("/graphiql/index.html")
-            .exchange()
-            .expectStatus()
-            .isOk
-            .expectBody()
-            .toString()
-            .contains("Simple GraphiQL Example")
-    }
 }

@@ -17,7 +17,7 @@
 package com.netflix.graphql.dgs.webflux.autoconfiguration
 
 import com.netflix.graphql.dgs.autoconfig.DgsAutoConfiguration
-import org.assertj.core.api.Assertions
+import graphql.Assert
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.autoconfigure.web.reactive.AutoConfigureWebTestClient
@@ -30,13 +30,15 @@ import org.springframework.web.reactive.config.EnableWebFlux
 @EnableWebFlux
 @SpringBootTest(
     classes = [DgsWebFluxAutoConfiguration::class, DgsAutoConfiguration::class, WebRequestTestWithCustomEndpoint.ExampleImplementation::class],
-    properties = ["dgs.graphql.graphiql.path=/customEndpoint"]
+    properties = ["dgs.graphql.graphiql.path=/coustomEndpoint"]
 )
-class GraphiQlCustomEndpoint(@Autowired private val webTestClient: WebTestClient) {
+class GraphiQlCustomEndpoint {
+    @Autowired
+    lateinit var webTestClient: WebTestClient
 
     @Test
     fun customGraphiQlPathRedirect() {
-        webTestClient.get().uri("/customEndpoint")
+        webTestClient.get().uri("/coustomEndpoint")
             .exchange()
             .expectStatus()
             .is3xxRedirection
@@ -44,11 +46,11 @@ class GraphiQlCustomEndpoint(@Autowired private val webTestClient: WebTestClient
 
     @Test
     fun customGraphiQlPath() {
-        webTestClient.get().uri("/customEndpoint/index.html")
+        webTestClient.get().uri("/coustomEndpoint/index.html")
             .exchange()
             .expectStatus()
             .is2xxSuccessful
             .expectBody<String>()
-            .consumeWith { Assertions.assertThat(it.responseBody).contains("fetch(origin + '/graphql"); }
+            .consumeWith { it -> Assert.assertTrue(it.responseBody!!.contains("fetch('/graphql")) }
     }
 }

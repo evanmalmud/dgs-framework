@@ -16,102 +16,131 @@
 
 package com.netflix.graphql.dgs.subscriptions.websockets
 
-import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.netflix.graphql.dgs.DgsQueryExecutor
 import com.netflix.graphql.types.subscription.*
-import jakarta.annotation.PostConstruct
-import org.slf4j.Logger
+import graphql.ExecutionResult
+import org.reactivestreams.Publisher
+import org.reactivestreams.Subscriber
+import org.reactivestreams.Subscription
 import org.slf4j.LoggerFactory
-import org.slf4j.event.Level
-import org.springframework.security.core.context.SecurityContext
-import org.springframework.security.core.context.SecurityContextHolder
-import org.springframework.util.ClassUtils
-import org.springframework.web.socket.CloseStatus
-import org.springframework.web.socket.SubProtocolCapable
 import org.springframework.web.socket.TextMessage
 import org.springframework.web.socket.WebSocketSession
 import org.springframework.web.socket.handler.TextWebSocketHandler
-import java.time.Duration
+import java.util.*
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.CopyOnWriteArrayList
+import javax.annotation.PostConstruct
 
-class DgsWebSocketHandler(
-    dgsQueryExecutor: DgsQueryExecutor,
-    connectionInitTimeout: Duration,
-    subscriptionErrorLogLevel: Level,
-    objectMapper: ObjectMapper = jacksonObjectMapper()
-) : TextWebSocketHandler(), SubProtocolCapable {
+class DgsWebSocketHandler(private val dgsQueryExecutor: DgsQueryExecutor) : TextWebSocketHandler() {
 
-    private val graphqlWSHandler = WebsocketGraphQLWSProtocolHandler(dgsQueryExecutor, subscriptionErrorLogLevel, objectMapper)
-    private val graphqlTransportWSHandler = WebsocketGraphQLTransportWSProtocolHandler(dgsQueryExecutor, connectionInitTimeout, subscriptionErrorLogLevel, objectMapper)
+    internal val subscriptions = ConcurrentHashMap<String, MutableMap<String, Subscription>>()
+    internal val sessions = CopyOnWriteArrayList<WebSocketSession>()
 
     @PostConstruct
     fun setupCleanup() {
-        try {
-            graphqlWSHandler.setupCleanup()
-        } catch (e: Exception) {
-            logger.error("Error setting up cleanup subscriptions tasks")
-        }
-        try {
-            graphqlTransportWSHandler.setupCleanup()
-        } catch (e: Exception) {
-            logger.error("Error setting up cleanup subscriptions tasks")
-        }
-    }
-
-    override fun afterConnectionEstablished(session: WebSocketSession) {
-        try {
-            graphqlWSHandler.afterConnectionEstablished(session)
-        } catch (e: Exception) {
-            logger.error("Unable to handle connection established for ${session.id}")
+        val timerTask = object : TimerTask() {
+            override fun run() {
+                sessions.filter { !it.isOpen }.forEach(this@DgsWebSocketHandler::cleanupSubscriptionsForSession)
+            }
         }
 
-        try {
-            graphqlTransportWSHandler.afterConnectionEstablished(session)
-        } catch (e: Exception) {
-            logger.error("Unable to handle connection established for ${session.id}")
-        }
-    }
-
-    override fun afterConnectionClosed(session: WebSocketSession, status: CloseStatus) {
-        try {
-            graphqlWSHandler.afterConnectionClosed(session, status)
-        } catch (e: Exception) {
-            logger.error("Error closing connection for session ${session.id}")
-        }
-
-        try {
-            graphqlTransportWSHandler.afterConnectionClosed(session, status)
-        } catch (e: Exception) {
-            logger.error("Error closing connection for session ${session.id}")
-        }
+        val timer = Timer(true)
+        timer.scheduleAtFixedRate(timerTask, 0, 5000)
     }
 
     public override fun handleTextMessage(session: WebSocketSession, message: TextMessage) {
-        loadSecurityContextFromSession(session)
-        if (session.acceptedProtocol.equals(GRAPHQL_SUBSCRIPTIONS_WS_PROTOCOL, ignoreCase = true)) {
-            return graphqlWSHandler.handleTextMessage(session, message)
-        } else if (session.acceptedProtocol.equals(GRAPHQL_SUBSCRIPTIONS_TRANSPORT_WS_PROTOCOL, ignoreCase = true)) {
-            return graphqlTransportWSHandler.handleTextMessage(session, message)
-        }
-    }
-
-    private fun loadSecurityContextFromSession(session: WebSocketSession) {
-        if (springSecurityAvailable) {
-            val securityContext = session.attributes["SPRING_SECURITY_CONTEXT"] as? SecurityContext
-            if (securityContext != null) {
-                SecurityContextHolder.setContext(securityContext)
+        val (type, payload, id) = objectMapper.readValue(message.payload, OperationMessage::class.java)
+        when (type) {
+            GQL_CONNECTION_INIT -> {
+                logger.info("Initialized connection for {}", session.id)
+                sessions.add(session)
+                session.sendMessage(
+                    TextMessage(
+                        objectMapper.writeValueAsBytes(
+                            OperationMessage(
+                                GQL_CONNECTION_ACK
+                            )
+                        )
+                    )
+                )
             }
+            GQL_START -> {
+                val queryPayload = objectMapper.convertValue(payload, QueryPayload::class.java)
+                handleSubscription(id!!, queryPayload, session)
+            }
+            GQL_STOP -> {
+                subscriptions[session.id]?.get(id)?.cancel()
+                subscriptions[session.id]?.remove(id)
+            }
+            GQL_CONNECTION_TERMINATE -> {
+                logger.info("Terminated session " + session.id)
+                cleanupSubscriptionsForSession(session)
+                subscriptions.remove(session.id)
+                session.close()
+            }
+            else -> session.sendMessage(TextMessage(objectMapper.writeValueAsBytes(OperationMessage("error"))))
         }
     }
 
-    override fun getSubProtocols(): List<String> = listOf(GRAPHQL_SUBSCRIPTIONS_WS_PROTOCOL, GRAPHQL_SUBSCRIPTIONS_TRANSPORT_WS_PROTOCOL)
+    private fun cleanupSubscriptionsForSession(session: WebSocketSession) {
+        logger.info("Cleaning up for session {}", session.id)
+        subscriptions[session.id]?.values?.forEach { it.cancel() }
+        subscriptions.remove(session.id)
+        sessions.remove(session)
+    }
+
+    private fun handleSubscription(id: String, payload: QueryPayload, session: WebSocketSession) {
+        val executionResult: ExecutionResult = dgsQueryExecutor.execute(payload.query, payload.variables)
+        val subscriptionStream: Publisher<ExecutionResult> = executionResult.getData()
+
+        subscriptionStream.subscribe(object : Subscriber<ExecutionResult> {
+            override fun onSubscribe(s: Subscription) {
+                logger.info("Subscription started for {}", id)
+                subscriptions.putIfAbsent(session.id, mutableMapOf())
+                subscriptions[session.id]?.set(id, s)
+
+                s.request(1)
+            }
+
+            override fun onNext(er: ExecutionResult) {
+                val message = OperationMessage(GQL_DATA, DataPayload(er.getData()), id)
+                val jsonMessage = TextMessage(objectMapper.writeValueAsBytes(message))
+                logger.debug("Sending subscription data: {}", jsonMessage)
+
+                if (session.isOpen) {
+                    session.sendMessage(jsonMessage)
+                    subscriptions[session.id]?.get(id)?.request(1)
+                }
+            }
+
+            override fun onError(t: Throwable) {
+                logger.error("Error on subscription {}", id, t)
+                val message = OperationMessage(GQL_ERROR, DataPayload(null, listOf(t.message!!)), id)
+                val jsonMessage = TextMessage(objectMapper.writeValueAsBytes(message))
+                logger.debug("Sending subscription error: {}", jsonMessage)
+
+                if (session.isOpen) {
+                    session.sendMessage(jsonMessage)
+                }
+            }
+
+            override fun onComplete() {
+                logger.info("Subscription completed for {}", id)
+                val message = OperationMessage(GQL_COMPLETE, null, id)
+                val jsonMessage = TextMessage(objectMapper.writeValueAsBytes(message))
+
+                if (session.isOpen) {
+                    session.sendMessage(jsonMessage)
+                }
+
+                subscriptions[session.id]?.remove(id)
+            }
+        })
+    }
 
     private companion object {
-        val logger: Logger = LoggerFactory.getLogger(DgsWebSocketHandler::class.java)
-
-        private val springSecurityAvailable: Boolean = ClassUtils.isPresent(
-            "org.springframework.security.core.context.SecurityContextHolder",
-            DgsWebSocketHandler::class.java.classLoader
-        )
+        val logger = LoggerFactory.getLogger(DgsWebSocketHandler::class.java)
+        val objectMapper = jacksonObjectMapper()
     }
 }

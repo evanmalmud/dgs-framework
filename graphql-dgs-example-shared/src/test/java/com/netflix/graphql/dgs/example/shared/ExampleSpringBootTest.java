@@ -14,23 +14,40 @@
  * limitations under the License.
  */
 
+<<<<<<<< HEAD:graphql-dgs/src/main/java/com/netflix/graphql/dgs/DgsDirective.java
+package com.netflix.graphql.dgs;
+
+import org.springframework.stereotype.Component;
+========
 package com.netflix.graphql.dgs.example.shared;
 
 import com.netflix.graphql.dgs.autoconfig.DgsAutoConfiguration;
-import com.netflix.graphql.dgs.autoconfig.DgsExtendedScalarsAutoConfiguration;
 import com.netflix.graphql.dgs.example.datafetcher.HelloDataFetcher;
-import com.netflix.graphql.dgs.example.shared.dataLoader.MessageDataLoaderWithDispatchPredicate;
-import com.netflix.graphql.dgs.example.shared.datafetcher.*;
+import com.netflix.graphql.dgs.example.shared.datafetcher.ConcurrentDataFetcher;
+import com.netflix.graphql.dgs.example.shared.datafetcher.MovieDataFetcher;
+import com.netflix.graphql.dgs.example.shared.datafetcher.RatingMutation;
 import com.netflix.graphql.dgs.pagination.DgsPaginationAutoConfiguration;
 import org.springframework.boot.test.context.SpringBootTest;
+>>>>>>>> 67adef78 (Merge branch 'master' into master):graphql-dgs-example-shared/src/test/java/com/netflix/graphql/dgs/example/shared/ExampleSpringBootTest.java
 
 import java.lang.annotation.ElementType;
+import java.lang.annotation.Inherited;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
+/**
+ * Mark a class as a custom Directive implementation that gets registered to the framework.
+ */
 @Target(ElementType.TYPE)
 @Retention(RetentionPolicy.RUNTIME)
-@SpringBootTest(classes = {HelloDataFetcher.class, MovieDataFetcher.class, ConcurrentDataFetcher.class, RequestHeadersDataFetcher.class, RatingMutation.class, CurrentTimeDateFetcher.class, DgsExtendedScalarsAutoConfiguration.class, DgsAutoConfiguration.class, DgsPaginationAutoConfiguration.class, MessageDataLoaderWithDispatchPredicate.class})
+<<<<<<<< HEAD:graphql-dgs/src/main/java/com/netflix/graphql/dgs/DgsDirective.java
+@Component
+@Inherited
+public @interface DgsDirective {
+    String name() default "";
+========
+@SpringBootTest(classes = {HelloDataFetcher.class, MovieDataFetcher.class, ConcurrentDataFetcher.class, RatingMutation.class, DgsAutoConfiguration.class, DgsPaginationAutoConfiguration.class})
 public @interface ExampleSpringBootTest {
+>>>>>>>> 67adef78 (Merge branch 'master' into master):graphql-dgs-example-shared/src/test/java/com/netflix/graphql/dgs/example/shared/ExampleSpringBootTest.java
 }

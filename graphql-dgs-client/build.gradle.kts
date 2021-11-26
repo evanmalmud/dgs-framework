@@ -20,7 +20,7 @@ dependencies {
     api("com.fasterxml.jackson.core:jackson-annotations")
     api(project(":graphql-dgs-subscription-types"))
 
-    compileOnly("org.springframework:spring-webflux")
+    implementation("org.springframework:spring-webflux")
 
     implementation("org.springframework:spring-web")
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
@@ -29,16 +29,12 @@ dependencies {
     implementation("com.fasterxml.jackson.datatype:jackson-datatype-jdk8")
     implementation("com.graphql-java:graphql-java")
 
-    implementation("org.jetbrains:annotations")
-
     testImplementation("org.springframework.boot:spring-boot-starter-web")
     testImplementation("org.springframework:spring-test")
     testImplementation("org.springframework.boot:spring-boot-starter-webflux")
     testImplementation("com.graphql-java:graphql-java-extended-scalars")
     testImplementation("io.projectreactor:reactor-test")
-    testImplementation(project(":graphql-dgs-subscriptions-graphql-sse-autoconfigure"))
     testImplementation(project(":graphql-dgs-subscriptions-sse-autoconfigure"))
-    testImplementation(project(":graphql-dgs-subscriptions-websockets-autoconfigure"))
     testImplementation(project(":graphql-dgs-spring-boot-oss-autoconfigure"))
     testImplementation(project(":graphql-dgs-spring-webmvc-autoconfigure"))
 }

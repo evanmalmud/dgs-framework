@@ -16,7 +16,7 @@
 
 package com.netflix.graphql.dgs.internal.java.test.inputobjects.sortby;
 
-public enum JMovieSortByField {
+enum JMovieSortByField {
     TITLE,
     RELEASEDATE
 }

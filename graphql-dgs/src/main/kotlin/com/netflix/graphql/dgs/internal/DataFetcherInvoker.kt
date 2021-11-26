@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Netflix, Inc.
+ * Copyright 2021 Netflix, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,115 +16,268 @@
 
 package com.netflix.graphql.dgs.internal
 
-import com.netflix.graphql.dgs.internal.method.ArgumentResolverComposite
-import graphql.schema.DataFetcher
+import com.fasterxml.jackson.module.kotlin.isKotlinClass
+import com.netflix.graphql.dgs.DgsDataFetchingEnvironment
+import com.netflix.graphql.dgs.InputArgument
+import com.netflix.graphql.dgs.context.DgsContext
+import com.netflix.graphql.dgs.exceptions.DgsInvalidInputArgumentException
+import com.netflix.graphql.dgs.exceptions.DgsMissingCookieException
 import graphql.schema.DataFetchingEnvironment
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.reactor.mono
-import org.springframework.core.BridgeMethodResolver
-import org.springframework.core.MethodParameter
-import org.springframework.core.ParameterNameDiscoverer
-import org.springframework.core.annotation.SynthesizingMethodParameter
-import org.springframework.core.task.AsyncTaskExecutor
-import org.springframework.util.CollectionUtils
+import kotlinx.coroutines.async
+import kotlinx.coroutines.future.asCompletableFuture
+import org.slf4j.LoggerFactory
+import org.springframework.core.DefaultParameterNameDiscoverer
+import org.springframework.core.annotation.AnnotationUtils
 import org.springframework.util.ReflectionUtils
-import java.lang.reflect.InvocationTargetException
+import org.springframework.web.bind.annotation.CookieValue
+import org.springframework.web.bind.annotation.RequestHeader
+import org.springframework.web.bind.annotation.RequestParam
+import org.springframework.web.bind.annotation.ValueConstants
 import java.lang.reflect.Method
-import kotlin.reflect.KFunction
-import kotlin.reflect.KParameter
-import kotlin.reflect.full.callSuspendBy
+import java.lang.reflect.Parameter
+import java.lang.reflect.ParameterizedType
+import java.util.*
+import kotlin.coroutines.Continuation
+import kotlin.reflect.full.callSuspend
 import kotlin.reflect.jvm.kotlinFunction
 
-class DataFetcherInvoker internal constructor(
+class DataFetcherInvoker(
+    private val cookieValueResolver: Optional<CookieValueResolver>,
+    defaultParameterNameDiscoverer: DefaultParameterNameDiscoverer,
+    private val environment: DataFetchingEnvironment,
     private val dgsComponent: Any,
-    method: Method,
-    private val resolvers: ArgumentResolverComposite,
-    parameterNameDiscoverer: ParameterNameDiscoverer,
-    taskExecutor: AsyncTaskExecutor?
-) : DataFetcher<Any?> {
+    private val method: Method
+) {
 
-    private val bridgedMethod: Method = BridgeMethodResolver.findBridgedMethod(method)
-    private val kotlinFunction: KFunction<*>? = bridgedMethod.kotlinFunction
-    private val completableFutureWrapper = CompletableFutureWrapper(taskExecutor)
+    private val parameterNames = defaultParameterNameDiscoverer.getParameterNames(method) ?: emptyArray()
 
-    private val methodParameters: List<MethodParameter> = bridgedMethod.parameters.map { parameter ->
-        val methodParameter = SynthesizingMethodParameter.forParameter(parameter)
-        methodParameter.initParameterNameDiscovery(parameterNameDiscoverer)
-        methodParameter
-    }
+    fun invokeDataFetcher(): Any? {
+        val args = mutableListOf<Any?>()
+        method.parameters.asSequence().filter { it.type != Continuation::class.java }.forEachIndexed { idx, parameter ->
 
-    init {
-        ReflectionUtils.makeAccessible(bridgedMethod)
-    }
+            when {
+                parameter.isAnnotationPresent(InputArgument::class.java) -> args.add(
+                    processInputArgument(
+                        parameter,
+                        idx
+                    )
+                )
+                parameter.isAnnotationPresent(RequestHeader::class.java) -> args.add(
+                    processRequestHeader(
+                        environment,
+                        parameter,
+                        idx
+                    )
+                )
+                parameter.isAnnotationPresent(RequestParam::class.java) -> args.add(
+                    processRequestArgument(
+                        environment,
+                        parameter,
+                        idx
+                    )
+                )
+                parameter.isAnnotationPresent(CookieValue::class.java) -> args.add(
+                    processCookieValueArgument(
+                        environment,
+                        parameter,
+                        idx
+                    )
+                )
 
-    override fun get(environment: DataFetchingEnvironment): Any? {
-        if (methodParameters.isEmpty()) {
-            if (completableFutureWrapper.shouldWrapInCompletableFuture(bridgedMethod)) {
-                return completableFutureWrapper.wrapInCompletableFuture { ReflectionUtils.invokeMethod(bridgedMethod, dgsComponent) }
+                environment.containsArgument(parameterNames[idx]) -> {
+                    val parameterValue: Any = environment.getArgument(parameterNames[idx])
+                    val convertValue = convertValue(parameterValue, parameter, null)
+                    args.add(convertValue)
+                }
+
+                parameter.type == DataFetchingEnvironment::class.java || parameter.type == DgsDataFetchingEnvironment::class.java -> {
+                    args.add(environment)
+                }
+                else -> {
+                    logger.warn("Unknown argument '${parameterNames[idx]}' on data fetcher ${dgsComponent.javaClass.name}.${method.name}")
+                    // This might cause an exception, but parameter's the best effort we can do
+                    args.add(null)
+                }
             }
-            return ReflectionUtils.invokeMethod(bridgedMethod, dgsComponent)
         }
 
-        if (kotlinFunction != null) {
-            return invokeKotlinMethod(kotlinFunction, environment)
-        }
+        return if (method.kotlinFunction?.isSuspend == true) {
 
-        val args = arrayOfNulls<Any?>(methodParameters.size)
-
-        for ((idx, parameter) in methodParameters.withIndex()) {
-            if (!resolvers.supportsParameter(parameter)) {
-                throw IllegalStateException(formatArgumentError(parameter, "No suitable resolver"))
+            val launch = CoroutineScope(Dispatchers.Unconfined).async {
+                return@async method.kotlinFunction!!.callSuspend(dgsComponent, *args.toTypedArray())
             }
-            args[idx] = resolvers.resolveArgument(parameter, environment)
-        }
 
-        return if (completableFutureWrapper.shouldWrapInCompletableFuture(bridgedMethod)) {
-            completableFutureWrapper.wrapInCompletableFuture { ReflectionUtils.invokeMethod(bridgedMethod, dgsComponent, *args) }
+            launch.asCompletableFuture()
         } else {
-            ReflectionUtils.invokeMethod(bridgedMethod, dgsComponent, *args)
+            ReflectionUtils.invokeMethod(method, dgsComponent, *args.toTypedArray())
         }
     }
 
-    private fun invokeKotlinMethod(kFunc: KFunction<*>, dfe: DataFetchingEnvironment): Any? {
-        val parameters = kFunc.parameters
-        val argsByName = CollectionUtils.newLinkedHashMap<KParameter, Any?>(parameters.size)
-
-        val paramSeq = if (parameters[0].kind == KParameter.Kind.INSTANCE) {
-            argsByName[parameters[0]] = dgsComponent
-            parameters.asSequence().drop(1)
+    private fun processCookieValueArgument(environment: DataFetchingEnvironment, parameter: Parameter, idx: Int): Any? {
+        val requestData = DgsContext.getRequestData(environment)
+        val annotation = AnnotationUtils.getAnnotation(parameter, CookieValue::class.java)!!
+        val name: String = AnnotationUtils.getAnnotationAttributes(annotation)["name"] as String
+        val parameterName = name.ifBlank { parameterNames[idx] }
+        val value = if (cookieValueResolver.isPresent) {
+            cookieValueResolver.get().getCookieValue(parameterName, requestData)
         } else {
-            parameters.asSequence()
+            null
+        }
+            ?: if (annotation.defaultValue != ValueConstants.DEFAULT_NONE) annotation.defaultValue else null
+
+        if (value == null && annotation.required) {
+            throw DgsMissingCookieException(parameterName)
         }
 
-        for ((kParameter, parameter) in paramSeq.zip(methodParameters.asSequence())) {
-            if (!resolvers.supportsParameter(parameter)) {
-                throw IllegalStateException(formatArgumentError(parameter, "No suitable resolver"))
-            }
-            val value = resolvers.resolveArgument(parameter, dfe)
-            if (value == null && kParameter.isOptional && !kParameter.type.isMarkedNullable) {
-                continue
-            }
-            argsByName[kParameter] = value
-        }
+        return getValueAsOptional(value, parameter)
+    }
 
-        if (kFunc.isSuspend) {
-            return mono(Dispatchers.Unconfined) {
-                kFunc.callSuspendBy(argsByName)
-            }.onErrorMap(InvocationTargetException::class.java) { it.targetException }
+    private fun processRequestArgument(environment: DataFetchingEnvironment, parameter: Parameter, idx: Int): Any? {
+        val requestData = DgsContext.getRequestData(environment)
+        val annotation = AnnotationUtils.getAnnotation(parameter, RequestParam::class.java)!!
+        val name: String = AnnotationUtils.getAnnotationAttributes(annotation)["name"] as String
+        val parameterName = name.ifBlank { parameterNames[idx] }
+        if (requestData is DgsWebMvcRequestData) {
+            val webRequest = requestData.webRequest
+            val value: Any? =
+                webRequest?.parameterMap?.get(parameterName)?.let {
+                    if (parameter.type.isAssignableFrom(List::class.java)) {
+                        it
+                    } else {
+                        it.joinToString()
+                    }
+                }
+                    ?: if (annotation.defaultValue != ValueConstants.DEFAULT_NONE) annotation.defaultValue else null
+
+            if (value == null && annotation.required) {
+                throw DgsInvalidInputArgumentException("Required request parameter '$parameterName' was not provided")
+            }
+
+            return getValueAsOptional(value, parameter)
+        } else {
+            logger.warn("@RequestParam is not supported when using WebFlux")
+            return null
         }
-        return try {
-            if (completableFutureWrapper.shouldWrapInCompletableFuture(kFunc)) {
-                completableFutureWrapper.wrapInCompletableFuture { kFunc.callBy(argsByName) }
+    }
+
+    private fun processRequestHeader(environment: DataFetchingEnvironment, parameter: Parameter, idx: Int): Any? {
+        val requestData = DgsContext.getRequestData(environment)
+        val annotation = AnnotationUtils.getAnnotation(parameter, RequestHeader::class.java)!!
+        val name: String = AnnotationUtils.getAnnotationAttributes(annotation)["name"] as String
+        val parameterName = name.ifBlank { parameterNames[idx] }
+        val value = requestData?.headers?.get(parameterName)?.let {
+            if (parameter.type.isAssignableFrom(List::class.java)) {
+                it
             } else {
-                kFunc.callBy(argsByName)
+                it.joinToString()
             }
-        } catch (ex: Exception) {
-            ReflectionUtils.handleReflectionException(ex)
+        } ?: if (annotation.defaultValue != ValueConstants.DEFAULT_NONE) annotation.defaultValue else null
+
+        if (value == null && annotation.required) {
+            throw DgsInvalidInputArgumentException("Required header '$parameterName' was not provided")
         }
+
+        return getValueAsOptional(value, parameter)
     }
 
-    private fun formatArgumentError(param: MethodParameter, message: String): String {
-        return "Could not resolve parameter [${param.parameterIndex}] in " +
-            param.executable.toGenericString() + if (message.isNotEmpty()) ": $message" else ""
+    private fun processInputArgument(parameter: Parameter, parameterIndex: Int): Any? {
+        val annotation = AnnotationUtils.getAnnotation(parameter, InputArgument::class.java)!!
+        val name: String = AnnotationUtils.getAnnotationAttributes(annotation)["name"] as String
+
+        val parameterName = name.ifBlank { parameterNames[parameterIndex] }
+        val collectionType = annotation.collectionType.java
+        val parameterValue: Any? = environment.getArgument(parameterName)
+
+        val convertValue: Any? =
+            if (parameterValue is List<*> && collectionType != Object::class.java) {
+                try {
+                    // Return a list of elements that are converted to their collection type, e.e.g. List<Person>, List<String> etc.
+                    parameterValue.map { item -> convertValue(item, parameter, collectionType) }.toList()
+                } catch (ex: Exception) {
+                    throw DgsInvalidInputArgumentException(
+                        "Specified type '$collectionType' is invalid for $parameterName.",
+                        ex
+                    )
+                }
+            } else if (parameterValue is Map<*, *> && parameter.type.isAssignableFrom(Map::class.java)) {
+                parameterValue
+            } else {
+                // Return the converted value mapped to the defined type
+                convertValue(parameterValue, parameter, collectionType)
+            }
+
+        val paramType = parameter.type
+        val optionalValue = getValueAsOptional(convertValue, parameter)
+
+        if (optionalValue != null && !paramType.isPrimitive && !paramType.isAssignableFrom(optionalValue.javaClass)) {
+            throw DgsInvalidInputArgumentException("Specified type '${parameter.type}' is invalid. Found ${parameterValue?.javaClass?.name} instead.")
+        }
+
+        if (convertValue == null && environment.fieldDefinition.arguments.none { it.name == parameterName }) {
+            logger.warn("Unknown argument '$parameterName' on data fetcher ${dgsComponent.javaClass.name}.${method.name}")
+        }
+
+        return optionalValue
+    }
+
+    private fun convertValue(parameterValue: Any?, parameter: Parameter, collectionType: Class<out Any>?) =
+        if (parameterValue is Map<*, *>) {
+            // Account for Optional
+            val targetType = if (parameter.type.isAssignableFrom(Optional::class.java) || parameter.type.isAssignableFrom(List::class.java) || parameter.type.isAssignableFrom(Set::class.java)) {
+                if (collectionType != null && collectionType != Object::class.java) {
+                    collectionType
+                } else {
+                    throw DgsInvalidInputArgumentException("When ${parameter.type.simpleName}<T> is used, the type must be specified using the collectionType argument of the @InputArgument annotation.")
+                }
+            } else {
+                parameter.type
+            }
+
+            if (targetType.isKotlinClass()) {
+                InputObjectMapper.mapToKotlinObject(parameterValue as Map<String, *>, targetType.kotlin)
+            } else {
+                InputObjectMapper.mapToJavaObject(parameterValue as Map<String, *>, targetType)
+            }
+        } else if ((parameter.type.isEnum || collectionType?.isEnum == true) && parameterValue != null) {
+            val enumConstants: Array<Enum<*>> =
+                if (parameter.type.isEnum) {
+                    parameter.type.enumConstants as Array<Enum<*>>
+                } else {
+                    collectionType?.enumConstants as Array<Enum<*>>
+                }
+
+            enumConstants.find { it.name == parameterValue }
+                ?: throw DgsInvalidInputArgumentException("Invalid enum value '$parameterValue for enum type ${parameter.type.name}")
+        } else if (parameter.type == Optional::class.java) {
+            val targetType: Class<*> = if (collectionType != Object::class.java) {
+                collectionType!!
+            } else {
+                (parameter.parameterizedType as ParameterizedType).actualTypeArguments[0] as Class<*>
+            }
+
+            if (targetType.isEnum) {
+                (targetType.enumConstants as Array<Enum<*>>).find { it.name == parameterValue }
+            } else {
+                parameterValue
+            }
+        } else {
+            if (parameterValue is List<*> && parameter.type == Set::class.java) {
+                parameterValue.toSet()
+            } else {
+                parameterValue
+            }
+        }
+
+    private fun getValueAsOptional(value: Any?, parameter: Parameter) =
+        if (parameter.type.isAssignableFrom(Optional::class.java)) {
+            Optional.ofNullable(value)
+        } else {
+            value
+        }
+
+    companion object {
+        private val logger = LoggerFactory.getLogger(DataFetcherInvoker::class.java)
     }
 }

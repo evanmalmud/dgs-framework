@@ -3,15 +3,13 @@ type Query {
     hello(name: String): String
     withContext: String
     withDataLoaderContext: String
-    withDataLoaderGraphQLContext: String
     movies: [Movie]
     messageFromBatchLoader: String
     messagesWithExceptionFromBatchLoader: [Message]
-    messageFromBatchLoaderWithScheduledDispatch: String
 
-    #Custom scalar example
-    now: LocalTime
-    schedule(time: LocalTime): Boolean
+#    #Custom scalar example
+#    now: LocalTime
+#    schedule(time: LocalTime): Boolean
 
     #To show how exceptions are handled
     withGraphqlException: String
@@ -92,5 +90,5 @@ type Stock {
 }
 
 scalar Upload
-scalar LocalTime
+
 

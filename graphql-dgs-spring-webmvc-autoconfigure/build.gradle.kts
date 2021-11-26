@@ -20,11 +20,7 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter")
     implementation("org.springframework:spring-webmvc")
     implementation("jakarta.servlet:jakarta.servlet-api")
-    implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
-    implementation("com.fasterxml.jackson.datatype:jackson-datatype-jsr310")
 
-
-    testImplementation(project(":graphql-dgs-spring-boot-oss-autoconfigure"))
     testImplementation("org.springframework.boot:spring-boot-starter-web")
-    testImplementation("com.github.ben-manes.caffeine:caffeine")
+    testImplementation(project(":graphql-dgs-spring-boot-oss-autoconfigure"))
 }

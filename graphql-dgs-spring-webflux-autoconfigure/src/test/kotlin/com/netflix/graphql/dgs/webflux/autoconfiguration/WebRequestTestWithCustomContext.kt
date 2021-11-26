@@ -38,21 +38,14 @@ import reactor.core.publisher.Mono
 
 @AutoConfigureWebTestClient
 @EnableWebFlux
-@SpringBootTest(
-    classes = [
-        DgsWebFluxAutoConfiguration::class,
-        DgsAutoConfiguration::class,
-        WebRequestTestWithCustomContext.ExampleImplementation::class,
-        WebRequestTestWithCustomContext.MyContextBuilder::class
-    ]
-)
+@SpringBootTest(classes = [DgsWebFluxAutoConfiguration::class, DgsAutoConfiguration::class, WebRequestTestWithCustomContext.ExampleImplementation::class, WebRequestTestWithCustomContext.MyContextBuilder::class])
 class WebRequestTestWithCustomContext {
     @Autowired
     lateinit var webTestClient: WebTestClient
 
     @Test
     fun `A simple request should execute correctly`() {
-        webTestClient.post().uri("/graphql").bodyValue(
+        val exchange = webTestClient.post().uri("/graphql").bodyValue(
             """
             {"query": "{hello}"}
             """.trimIndent()
@@ -61,7 +54,7 @@ class WebRequestTestWithCustomContext {
 
     @Test
     fun `Reactive custom context should be available`() {
-        webTestClient.post().uri("/graphql").header("myheader", "DGS").bodyValue(
+        val exchange = webTestClient.post().uri("/graphql").header("myheader", "DGS").bodyValue(
             """
             {"query": "{withContext}"}
             """.trimIndent()
@@ -70,7 +63,7 @@ class WebRequestTestWithCustomContext {
 
     @Test
     fun `@RequestHeader should receive HTTP header`() {
-        webTestClient.post().uri("/graphql").header("myheader", "DGS").bodyValue(
+        val exchange = webTestClient.post().uri("/graphql").header("myheader", "DGS").bodyValue(
             """
             {"query": "{withHeader}"}
             """.trimIndent()

@@ -18,7 +18,6 @@ package com.netflix.graphql.dgs.metrics.micrometer
 
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
-import java.util.function.Consumer
 
 internal class SpectatorLimitedTagMetricResolverTest {
 
@@ -50,16 +49,14 @@ internal class SpectatorLimitedTagMetricResolverTest {
 
         assertThat(list).isNotEmpty
         assertThat(list.map { it.get().key }.distinct())
-            .singleElement().satisfies(Consumer { assertThat(it).isEqualTo(name) })
+            .hasOnlyOneElementSatisfying { assertThat(it).isEqualTo(name) }
         assertThat(list.mapIndexed { a, b -> a to b.get().value })
-            .allSatisfy(
-                Consumer { (i, v) ->
-                    if (i < limit) {
-                        assertThat(v).isEqualTo(i.toString())
-                    } else {
-                        assertThat(v).isEqualTo("--others--")
-                    }
+            .allSatisfy { (i, v) ->
+                if (i < limit) {
+                    assertThat(v).isEqualTo(i.toString())
+                } else {
+                    assertThat(v).isEqualTo("--others--")
                 }
-            )
+            }
     }
 }

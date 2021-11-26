@@ -55,7 +55,7 @@ import java.util.*
 open class CacheableQuerySignatureRepository(
     properties: DgsGraphQLMetricsProperties,
     meterRegistrySupplier: DgsMeterRegistrySupplier,
-    private val optionalCacheManager: Optional<CacheManager>
+    private val optionalCacheManager: Optional<CacheManager>,
 ) : SimpleQuerySignatureRepository(properties, meterRegistrySupplier) {
 
     private lateinit var cache: Cache
@@ -73,7 +73,7 @@ open class CacheableQuerySignatureRepository(
     ): QuerySignatureRepository.QuerySignature {
         val key = CacheKey(queryHash, queryName)
         log.debug("Computing query signature for query with cache key: {}.", key)
-        return cache.get(key) { super.computeQuerySignature(queryHash, queryName, document) }!!
+        return cache.get(key) { super.computeQuerySignature(queryHash, queryName, document) }
     }
 
     override fun afterPropertiesSet() {

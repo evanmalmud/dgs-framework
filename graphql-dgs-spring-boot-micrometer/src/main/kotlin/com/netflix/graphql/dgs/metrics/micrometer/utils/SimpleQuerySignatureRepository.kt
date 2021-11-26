@@ -24,7 +24,7 @@ import com.netflix.graphql.dgs.metrics.micrometer.DgsMeterRegistrySupplier
 import graphql.execution.instrumentation.parameters.InstrumentationExecutionParameters
 import graphql.language.Document
 import io.micrometer.core.instrument.MeterRegistry
-import io.micrometer.core.instrument.Tag
+import io.micrometer.core.instrument.Tags
 import io.micrometer.core.instrument.Timer
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
@@ -39,7 +39,7 @@ import java.util.*
 @Internal
 open class SimpleQuerySignatureRepository(
     private val properties: DgsGraphQLMetricsProperties,
-    private val meterRegistrySupplier: DgsMeterRegistrySupplier
+    private val meterRegistrySupplier: DgsMeterRegistrySupplier,
 ) : QuerySignatureRepository, InitializingBean {
 
     companion object {
@@ -53,7 +53,7 @@ open class SimpleQuerySignatureRepository(
         parameters: InstrumentationExecutionParameters
     ): Optional<QuerySignatureRepository.QuerySignature> {
         val timerSample = Timer.start(meterRegistry)
-        val tags = mutableListOf<Tag>()
+        var tags = Tags.empty()
         val queryHash = QuerySignatureRepository.queryHash(parameters.query)
         return try {
             val result = Optional.ofNullable(
@@ -63,22 +63,21 @@ open class SimpleQuerySignatureRepository(
                     document
                 )
             )
-            tags += CommonTags.SUCCESS.tag
+            tags = tags.and(CommonTags.SUCCESS.tag)
             return result
         } catch (error: Throwable) {
-            tags += CommonTags.FAILURE.tags(error)
+            tags = tags.and(CommonTags.FAILURE.tags(error))
             log.error(
                 "Failed to fetch query signature from cache, query [hash:{}, name:{}].",
-                queryHash,
-                parameters.operation
+                queryHash, parameters.operation
             )
             Optional.empty()
         } finally {
-            tags += CommonTags.JAVA_CLASS.tags(this)
-            tags += CommonTags.JAVA_CLASS_METHOD.tags("get")
             timerSample.stop(
                 properties.autotime
                     .builder(InternalMetric.TIMED_METHOD.key)
+                    .tags(CommonTags.JAVA_CLASS.tags(this))
+                    .tags(CommonTags.JAVA_CLASS_METHOD.tags("get"))
                     .tags(tags)
                     .register(meterRegistry)
             )

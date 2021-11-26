@@ -14,15 +14,10 @@
  * limitations under the License.
  */
 
-@file:Suppress("GraphQLUnresolvedReference")
-
 package com.netflix.graphql.dgs.client
 
 import org.assertj.core.api.Assertions.assertThat
-import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
-import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.CsvSource
 import org.springframework.http.HttpEntity
 import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpMethod
@@ -35,6 +30,7 @@ import org.springframework.test.web.client.response.MockRestResponseCreators.wit
 import org.springframework.web.client.RestTemplate
 import java.time.OffsetDateTime
 
+@Suppress("DEPRECATION")
 class GraphQLResponseTest {
 
     private val restTemplate = RestTemplate()
@@ -44,117 +40,24 @@ class GraphQLResponseTest {
         val httpHeaders = HttpHeaders()
         headers.forEach { httpHeaders.addAll(it.key, it.value) }
 
-        val response = restTemplate.exchange(url, HttpMethod.POST, HttpEntity(body, httpHeaders), String::class.java)
-        HttpResponse(statusCode = response.statusCode.value(), body = response.body, headers = response.headers)
+        val exchange = restTemplate.exchange(url, HttpMethod.POST, HttpEntity(body, httpHeaders), String::class.java)
+        HttpResponse(exchange.statusCodeValue, exchange.body)
+    }
+
+    private val requestExecutorWithResponseHeaders = RequestExecutor { url, headers, body ->
+        val httpHeaders = HttpHeaders()
+        headers.forEach { httpHeaders.addAll(it.key, it.value) }
+
+        val exchange = restTemplate.exchange(url, HttpMethod.POST, HttpEntity(body, httpHeaders), String::class.java)
+        HttpResponse(exchange.statusCodeValue, exchange.body, exchange.headers.toMap())
     }
 
     private val url = "http://localhost:8080/graphql"
-    private val client = CustomGraphQLClient(url = url, requestExecutor = requestExecutor)
-
-    @ParameterizedTest
-    @CsvSource(
-        value = [
-            "data, data",
-            "foo, data.foo",
-            "data.foo, data.foo",
-            "datafoo, data.datafoo"
-        ]
-    )
-    fun normalizeDataPath(path: String, expectedPath: String) {
-        assertThat(GraphQLResponse.getDataPath(path)).isEqualTo(expectedPath)
-    }
+    private val client = DefaultGraphQLClient(url)
 
     @Test
     fun dateParse() {
-        // language=json
-        val jsonResponse = """
-            {
-              "data": {
-                "submitReview": {
-                  "edges": [
-                    {
-                      "node": {
-                        "submittedBy": "pbakker@netflix.com",
-                        "postedDate": "2020-10-29T12:22:47.789933-07:00"
-                      }
-                    },
-                    {
-                      "node": {
-                        "submittedBy": "pbakker@netflix.com",
-                        "postedDate": "2020-10-29T12:22:54.327407-07:00"
-                      }
-                    }
-                  ]
-                }
-              }
-            }
-        """.trimIndent()
 
-        server.expect(requestTo(url))
-            .andExpect(method(HttpMethod.POST))
-            .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
-            .andRespond(withSuccess(jsonResponse, MediaType.APPLICATION_JSON))
-
-        val graphQLResponse = client.executeQuery(
-            // language=graphql
-            """
-            mutation {
-              submitReview(review:{movieId:1, starRating:5, description:""}) {
-                edges {
-                  node {
-                    submittedBy
-                    postedDate
-                  }
-                }
-              }
-            }
-            """.trimIndent(),
-            emptyMap()
-        )
-
-        val offsetDateTime = graphQLResponse.extractValueAsObject("submitReview.edges[0].node.postedDate", OffsetDateTime::class.java)
-        assertThat(offsetDateTime).isInstanceOf(OffsetDateTime::class.java)
-        assertThat(offsetDateTime.dayOfMonth).isEqualTo(29)
-        server.verify()
-    }
-
-    @Test
-    fun populateResponseHeaders() {
-        // language=json
-        val jsonResponse = """
-            {
-              "data": {
-                "submitReview": {
-                   "submittedBy": "abc@netflix.com"
-                }
-              }
-            }
-        """.trimIndent()
-
-        server.expect(requestTo(url))
-            .andExpect(method(HttpMethod.POST))
-            .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
-            .andRespond(withSuccess(jsonResponse, MediaType.APPLICATION_JSON))
-
-        val graphQLResponse = client.executeQuery(
-            """query {
-              submitReview(review:{movieId:1, description:""}) {
-                submittedBy
-              }
-            }
-            """.trimIndent(),
-            emptyMap()
-        )
-
-        val submittedBy = graphQLResponse.extractValueAsObject("submitReview.submittedBy", String::class.java)
-        assertThat(submittedBy).isEqualTo("abc@netflix.com")
-        assertThat(graphQLResponse.headers["Content-Type"].orEmpty().single()).isEqualTo("application/json")
-        server.verify()
-    }
-
-    @Test
-    fun listAsObject() {
-        // language=json
         val jsonResponse = """
             {
               "data": {
@@ -193,9 +96,91 @@ class GraphQLResponseTest {
                   }
                 }
               }
+            }""",
+            emptyMap(), requestExecutor
+        )
+
+        val offsetDateTime = graphQLResponse.extractValueAsObject("submitReview.edges[0].node.postedDate", OffsetDateTime::class.java)
+        assertThat(offsetDateTime).isInstanceOf(OffsetDateTime::class.java)
+        assertThat(offsetDateTime.dayOfMonth).isEqualTo(29)
+        server.verify()
+    }
+
+    @Test
+    fun populateResponseHeaders() {
+        val jsonResponse = """
+            {
+              "data": {
+                "submitReview": {
+                   "submittedBy": "abc@netflix.com"
+                }
+              }
             }
-            """.trimIndent(),
-            emptyMap()
+        """.trimIndent()
+
+        server.expect(requestTo(url))
+            .andExpect(method(HttpMethod.POST))
+            .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+            .andRespond(withSuccess(jsonResponse, MediaType.APPLICATION_JSON))
+
+        val graphQLResponse = client.executeQuery(
+            """query {
+              submitReview(review:{movieId:1, description:""}) {
+                submittedBy
+              }
+            }""",
+            emptyMap(), requestExecutorWithResponseHeaders
+        )
+
+        val submittedBy = graphQLResponse.extractValueAsObject("submitReview.submittedBy", String::class.java)
+        assertThat(submittedBy).isEqualTo("abc@netflix.com")
+        assertThat(graphQLResponse.headers["Content-Type"]?.get(0)).isEqualTo("application/json")
+        server.verify()
+    }
+
+    @Test
+    fun listAsObject() {
+
+        val jsonResponse = """
+            {
+              "data": {
+                "submitReview": {
+                  "edges": [
+                    {
+                      "node": {
+                        "submittedBy": "pbakker@netflix.com",
+                        "postedDate": "2020-10-29T12:22:47.789933-07:00"
+                      }
+                    },
+                    {
+                      "node": {
+                        "submittedBy": "pbakker@netflix.com",
+                        "postedDate": "2020-10-29T12:22:54.327407-07:00"
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+        """.trimIndent()
+
+        server.expect(requestTo(url))
+            .andExpect(method(HttpMethod.POST))
+            .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+            .andRespond(withSuccess(jsonResponse, MediaType.APPLICATION_JSON))
+
+        val graphQLResponse = client.executeQuery(
+            """mutation {
+              submitReview(review:{movieId:1, starRating:5, description:""}) {
+                edges {
+                  node {
+                    submittedBy
+                    postedDate
+                  }
+                }
+              }
+            }""",
+            emptyMap(), requestExecutor
         )
 
         val listOfSubmittedBy = graphQLResponse.extractValueAsObject(
@@ -209,7 +194,7 @@ class GraphQLResponseTest {
 
     @Test
     fun useOperationName() {
-        // language=json
+
         val jsonResponse = """
             {
               "data": {
@@ -227,34 +212,12 @@ class GraphQLResponseTest {
             .andRespond(withSuccess(jsonResponse, MediaType.APPLICATION_JSON))
 
         val graphQLResponse = client.executeQuery(
-            // language=graphql
-            """
-            mutation SubmitUserReview {
-                submitReview(review:{movieId:1, starRating:5, description:""}) {}
-            }
-            """.trimIndent(),
-            emptyMap(),
-            "SubmitUserReview"
+            """mutation SubmitUserReview {
+              submitReview(review:{movieId:1, starRating:5, description:""}) {}
+            }""",
+            emptyMap(), "SubmitUserReview", requestExecutor
         )
-        assertThat(graphQLResponse.hasErrors()).isFalse
 
         server.verify()
-    }
-
-    @Test
-    fun testExtractValue() {
-        val response = GraphQLResponse("""{"data": {"submitReview": {"submittedBy": "abc@netflix.com"}}}""")
-        val result = response.extractValue<Map<String, Any?>>("data")
-        assertEquals(mapOf("submitReview" to mapOf("submittedBy" to "abc@netflix.com")), result)
-        assertEquals("abc@netflix.com", response.extractValue("data.submitReview.submittedBy"))
-        assertEquals("abc@netflix.com", response.extractValue("submitReview.submittedBy"))
-    }
-
-    @Test
-    fun testDataAsObject() {
-        data class Response(val submitReview: Map<String, String>)
-        val response = GraphQLResponse("""{"data": {"submitReview": {"submittedBy": "abc@netflix.com"}}}""")
-        val result = response.dataAsObject(Response::class.java)
-        assertEquals(Response(submitReview = mapOf("submittedBy" to "abc@netflix.com")), result)
     }
 }

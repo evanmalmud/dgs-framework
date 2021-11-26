@@ -16,14 +16,16 @@
 
 package com.netflix.graphql.dgs.webmvc.autoconfigure
 
-import jakarta.annotation.PostConstruct
 import org.springframework.boot.context.properties.ConfigurationProperties
+import org.springframework.boot.context.properties.ConstructorBinding
 import org.springframework.boot.context.properties.NestedConfigurationProperty
 import org.springframework.boot.context.properties.bind.DefaultValue
+import javax.annotation.PostConstruct
 
 /**
  * Configuration properties for DGS web controllers.
  */
+@ConstructorBinding
 @ConfigurationProperties(prefix = "dgs.graphql")
 @Suppress("ConfigurationProperties")
 data class DgsWebMvcConfigurationProperties(
@@ -37,11 +39,8 @@ data class DgsWebMvcConfigurationProperties(
      */
     data class DgsGraphiQLConfigurationProperties(
         /** Path to the GraphiQL endpoint without trailing slash. */
-        @DefaultValue("/graphiql") var path: String = "/graphiql",
-        /** GraphiQL title */
-        @DefaultValue("Simple GraphiQL Example") var title: String = "Simple GraphiQL Example"
+        @DefaultValue("/graphiql") var path: String = "/graphiql"
     )
-
     /**
      * Configuration properties for the schema-json endpoint.
      */

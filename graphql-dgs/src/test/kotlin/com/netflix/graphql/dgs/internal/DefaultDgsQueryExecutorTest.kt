@@ -18,22 +18,12 @@ package com.netflix.graphql.dgs.internal
 
 import com.jayway.jsonpath.TypeRef
 import com.jayway.jsonpath.spi.mapper.MappingException
-import com.netflix.graphql.dgs.DgsComponent
-import com.netflix.graphql.dgs.DgsData
-import com.netflix.graphql.dgs.DgsDirective
-import com.netflix.graphql.dgs.DgsExecutionResult
-import com.netflix.graphql.dgs.DgsScalar
-import com.netflix.graphql.dgs.InputArgument
-import com.netflix.graphql.dgs.LocalDateTimeScalar
-import com.netflix.graphql.dgs.exceptions.DgsBadRequestException
+import com.netflix.graphql.dgs.*
 import com.netflix.graphql.dgs.exceptions.DgsQueryExecutionDataExtractionException
 import com.netflix.graphql.dgs.exceptions.QueryException
-import com.netflix.graphql.dgs.internal.method.InputArgumentResolver
-import com.netflix.graphql.dgs.internal.method.MethodDataFetcherFactory
-import graphql.InvalidSyntaxError
 import graphql.execution.AsyncExecutionStrategy
 import graphql.execution.AsyncSerialExecutionStrategy
-import graphql.execution.instrumentation.SimplePerformantInstrumentation
+import graphql.execution.instrumentation.ChainedInstrumentation
 import io.mockk.every
 import io.mockk.impl.annotations.MockK
 import io.mockk.junit5.MockKExtension
@@ -46,10 +36,9 @@ import org.junit.jupiter.api.extension.ExtendWith
 import org.springframework.context.ApplicationContext
 import org.springframework.http.HttpHeaders
 import java.time.LocalDateTime
-import java.util.Optional
+import java.util.*
 import java.util.function.Supplier
 
-@Suppress("GraphQLUnresolvedReference")
 @ExtendWith(MockKExtension::class)
 internal class DefaultDgsQueryExecutorTest {
 
@@ -59,10 +48,11 @@ internal class DefaultDgsQueryExecutorTest {
     @MockK
     lateinit var dgsDataLoaderProvider: DgsDataLoaderProvider
 
-    lateinit var dgsQueryExecutor: DefaultDgsQueryExecutor
+    var dgsQueryExecutor: DefaultDgsQueryExecutor? = null
 
     @BeforeEach
     fun createExecutor() {
+
         val fetcher = object : Any() {
             @DgsData(parentType = "Query", field = "hello")
             fun hello(): String {
@@ -98,30 +88,17 @@ internal class DefaultDgsQueryExecutorTest {
             }
         }
 
-        every { applicationContextMock.getBeansWithAnnotation(DgsComponent::class.java) } returns mapOf(
-            Pair(
-                "helloFetcher",
-                fetcher
-            ),
-            Pair("numbersFetcher", numbersFetcher),
-            Pair("moviesFetcher", moviesFetcher),
-            Pair("withErrorFetcher", fetcherWithError),
-            Pair("echoFetcher", echoFetcher)
-        )
-        every { applicationContextMock.getBeansWithAnnotation(DgsScalar::class.java) } returns mapOf(
-            Pair(
-                "DateTimeScalar",
-                LocalDateTimeScalar()
-            )
-        )
+        every { applicationContextMock.getBeansWithAnnotation(DgsComponent::class.java) } returns mapOf(Pair("helloFetcher", fetcher), Pair("numbersFetcher", numbersFetcher), Pair("moviesFetcher", moviesFetcher), Pair("withErrorFetcher", fetcherWithError), Pair("echoFetcher", echoFetcher))
+        every { applicationContextMock.getBeansWithAnnotation(DgsScalar::class.java) } returns mapOf(Pair("DateTimeScalar", LocalDateTimeScalar()))
         every { applicationContextMock.getBeansWithAnnotation(DgsDirective::class.java) } returns emptyMap()
         every { dgsDataLoaderProvider.buildRegistryWithContextSupplier(any<Supplier<Any>>()) } returns DataLoaderRegistry()
 
         val provider = DgsSchemaProvider(
-            applicationContext = applicationContextMock,
+            applicationContextMock,
             federationResolver = Optional.empty(),
+            dataFetcherExceptionHandler = Optional.empty(),
             existingTypeDefinitionRegistry = Optional.empty(),
-            methodDataFetcherFactory = MethodDataFetcherFactory(listOf(InputArgumentResolver(DefaultInputObjectMapper())))
+            mockProviders = Optional.empty()
         )
 
         val schema = provider.schema(
@@ -147,66 +124,12 @@ internal class DefaultDgsQueryExecutorTest {
             """.trimIndent()
         )
 
-        dgsQueryExecutor = DefaultDgsQueryExecutor(
-            defaultSchema = schema,
-            schemaProvider = provider,
-            dataLoaderProvider = dgsDataLoaderProvider,
-            contextBuilder = DefaultDgsGraphQLContextBuilder(Optional.empty()),
-            instrumentation = SimplePerformantInstrumentation.INSTANCE,
-            queryExecutionStrategy = AsyncExecutionStrategy(),
-            mutationExecutionStrategy = AsyncSerialExecutionStrategy(),
-            idProvider = Optional.empty()
-        )
-    }
-
-    @Test
-    fun `Empty query returns DgsExecutionResult with NULL_OR_EMPTY_QUERY_EXCEPTION`() {
-        val result = dgsQueryExecutor.execute(" ")
-
-        assertThat(result)
-            .isNotNull
-            .isInstanceOf(DgsExecutionResult::class.java)
-
-        assertThat(
-            result
-                .errors
-                .first()
-                .extensions["errorType"]
-            // default bad request error type
-        ).isEqualTo(
-            DgsBadRequestException()
-                .errorType
-                .name
-        )
-
-        assertThat(
-            result
-                .errors
-                .first()
-                .message
-        ).isEqualTo(DgsBadRequestException.NULL_OR_EMPTY_QUERY_EXCEPTION.message)
-
-        val springResponse = (result as DgsExecutionResult).toSpringResponse()
-
-        assertThat(
-            springResponse
-                .statusCode
-                .value()
-        ).isEqualTo(400)
-    }
-
-    @Test
-    fun `Invalid Syntax query returns a GraphQL Error wth type SyntaxError`() {
-        val result = dgsQueryExecutor.execute("a")
-        assertThat(result)
-            .isNotNull
-            .extracting { it.errors.first() }
-            .isInstanceOf(InvalidSyntaxError::class.java)
+        dgsQueryExecutor = DefaultDgsQueryExecutor(schema, provider, dgsDataLoaderProvider, DefaultDgsGraphQLContextBuilder(Optional.empty()), ChainedInstrumentation(), AsyncExecutionStrategy(), AsyncSerialExecutionStrategy(), Optional.empty())
     }
 
     @Test
     fun extractJsonWithString() {
-        val helloResult = dgsQueryExecutor.executeAndExtractJsonPath<String>(
+        val helloResult = dgsQueryExecutor!!.executeAndExtractJsonPath<String>(
             """
             {
                 hello
@@ -220,7 +143,7 @@ internal class DefaultDgsQueryExecutorTest {
 
     @Test
     fun extractJsonWithListOfString() {
-        val numbers = dgsQueryExecutor.executeAndExtractJsonPath<List<Int>>(
+        val numbers = dgsQueryExecutor!!.executeAndExtractJsonPath<List<Int>>(
             """
             {
                 numbers
@@ -234,7 +157,7 @@ internal class DefaultDgsQueryExecutorTest {
 
     @Test
     fun extractJsonWithObjectListAsMap() {
-        val movies = dgsQueryExecutor.executeAndExtractJsonPath<List<Map<String, Any>>>(
+        val movies = dgsQueryExecutor!!.executeAndExtractJsonPath<List<Map<String, Any>>>(
             """
             {
                 movies { title releaseDate }
@@ -249,7 +172,7 @@ internal class DefaultDgsQueryExecutorTest {
 
     @Test
     fun extractJsonAsObjectAsMap() {
-        val movie = dgsQueryExecutor.executeAndExtractJsonPath<Map<String, Any>>(
+        val movie = dgsQueryExecutor!!.executeAndExtractJsonPath<Map<String, Any>>(
             """
             {
                 movies { title releaseDate }
@@ -264,14 +187,13 @@ internal class DefaultDgsQueryExecutorTest {
 
     @Test
     fun extractJsonAsObject() {
-        val movie = dgsQueryExecutor.executeAndExtractJsonPathAsObject(
+        val movie = dgsQueryExecutor!!.executeAndExtractJsonPathAsObject(
             """
             {
                 movies { title releaseDate }
             }
             """.trimIndent(),
-            "data.movies[0]",
-            Movie::class.java
+            "data.movies[0]", Movie::class.java
         )
 
         assertThat(movie.title).isEqualTo("Extraction")
@@ -280,14 +202,13 @@ internal class DefaultDgsQueryExecutorTest {
 
     @Test
     fun extractJsonAsObjectWithTypeRef() {
-        val person = dgsQueryExecutor.executeAndExtractJsonPathAsObject(
+        val person = dgsQueryExecutor!!.executeAndExtractJsonPathAsObject(
             """
             {
                 movies { title releaseDate }
             }
             """.trimIndent(),
-            "data.movies",
-            object : TypeRef<List<Movie>>() {}
+            "data.movies", object : TypeRef<List<Movie>>() {}
         )
 
         assertThat(person).isInstanceOf(List::class.java)
@@ -297,7 +218,7 @@ internal class DefaultDgsQueryExecutorTest {
     @Test
     fun extractJsonAsObjectTypeRefWithVariables() {
         val expectedMessage = "hello dgs"
-        val message = dgsQueryExecutor.executeAndExtractJsonPathAsObject(
+        val message = dgsQueryExecutor!!.executeAndExtractJsonPathAsObject(
             "query echo(\$message: String) { echo(message: \$message)}",
             "data.echo",
             mapOf("message" to expectedMessage),
@@ -313,7 +234,7 @@ internal class DefaultDgsQueryExecutorTest {
         httpHeaders.add("test", "headerValue")
 
         val expectedMessage = "hello dgs"
-        val message = dgsQueryExecutor.executeAndExtractJsonPathAsObject(
+        val message = dgsQueryExecutor!!.executeAndExtractJsonPathAsObject(
             "query echo(\$message: String) { echo(message: \$message)}",
             "data.echo",
             mapOf("message" to expectedMessage),
@@ -327,7 +248,7 @@ internal class DefaultDgsQueryExecutorTest {
     @Test
     fun extractJsonAsObjectClazzWithVariables() {
         val expectedMessage = "hello dgs"
-        val message = dgsQueryExecutor.executeAndExtractJsonPathAsObject(
+        val message = dgsQueryExecutor!!.executeAndExtractJsonPathAsObject(
             "query echo(\$message: String) { echo(message: \$message)}",
             "data.echo",
             mapOf("message" to expectedMessage),
@@ -343,7 +264,7 @@ internal class DefaultDgsQueryExecutorTest {
         httpHeaders.add("test", "headerValue")
 
         val expectedMessage = "hello dgs"
-        val message = dgsQueryExecutor.executeAndExtractJsonPathAsObject(
+        val message = dgsQueryExecutor!!.executeAndExtractJsonPathAsObject(
             "query echo(\$message: String) { echo(message: \$message)}",
             "data.echo",
             mapOf("message" to expectedMessage),
@@ -357,7 +278,7 @@ internal class DefaultDgsQueryExecutorTest {
     @Test
     fun extractError() {
         val queryException = assertThrows<QueryException> {
-            dgsQueryExecutor.executeAndExtractJsonPath<String>(
+            dgsQueryExecutor!!.executeAndExtractJsonPath<String>(
                 """
             {
                 withError            
@@ -373,14 +294,13 @@ internal class DefaultDgsQueryExecutorTest {
     @Test
     fun extractJsonAsObjectError() {
         val assertThrows = assertThrows<DgsQueryExecutionDataExtractionException> {
-            dgsQueryExecutor.executeAndExtractJsonPathAsObject(
+            dgsQueryExecutor!!.executeAndExtractJsonPathAsObject(
                 """
             {
                 movies { title } 
             }
                 """.trimIndent(),
-                "data.movies[0]",
-                String::class.java
+                "data.movies[0]", String::class.java
             )
         }
 
@@ -394,14 +314,13 @@ internal class DefaultDgsQueryExecutorTest {
     @Test
     fun extractJsonAsTypeRefError() {
         val assertThrows = assertThrows<DgsQueryExecutionDataExtractionException> {
-            dgsQueryExecutor.executeAndExtractJsonPathAsObject(
+            dgsQueryExecutor!!.executeAndExtractJsonPathAsObject(
                 """
             {
                 movies { title } 
             }
                 """.trimIndent(),
-                "data.movies[0]",
-                object : TypeRef<List<String>>() {}
+                "data.movies[0]", object : TypeRef<List<String>>() {}
             )
         }
 
@@ -414,7 +333,7 @@ internal class DefaultDgsQueryExecutorTest {
 
     @Test
     fun documentContext() {
-        val context = dgsQueryExecutor.executeAndGetDocumentContext(
+        val context = dgsQueryExecutor!!.executeAndGetDocumentContext(
             """
             {
                 movies { title releaseDate }
@@ -430,7 +349,7 @@ internal class DefaultDgsQueryExecutorTest {
 
     @Test
     fun documentContextWithTypename() {
-        val context = dgsQueryExecutor.executeAndGetDocumentContext(
+        val context = dgsQueryExecutor!!.executeAndGetDocumentContext(
             """
             {
                 movies { title __typename }
@@ -444,7 +363,8 @@ internal class DefaultDgsQueryExecutorTest {
 
     @Test
     fun withFieldNamedErrors() {
-        val context = dgsQueryExecutor.executeAndGetDocumentContext(
+
+        val context = dgsQueryExecutor!!.executeAndGetDocumentContext(
             """
             {
                 movies { title __typename }

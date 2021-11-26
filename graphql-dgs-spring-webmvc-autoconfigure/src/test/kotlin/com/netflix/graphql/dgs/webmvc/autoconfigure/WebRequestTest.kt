@@ -28,37 +28,25 @@ import graphql.language.FieldDefinition
 import graphql.language.ObjectTypeDefinition
 import graphql.language.TypeName
 import graphql.schema.idl.TypeDefinitionRegistry
-import jakarta.servlet.http.Cookie
-import org.hamcrest.CoreMatchers.containsString
-import org.hamcrest.CoreMatchers.equalTo
-import org.hamcrest.CoreMatchers.hasItem
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.http.HttpHeaders
-import org.springframework.http.MediaType
 import org.springframework.stereotype.Component
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders
-import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
-import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
+import org.springframework.test.web.servlet.result.MockMvcResultMatchers
 import org.springframework.web.bind.annotation.CookieValue
 import org.springframework.web.bind.annotation.RequestHeader
 import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.context.request.ServletWebRequest
 import org.springframework.web.context.request.WebRequest
-import org.springframework.web.servlet.config.annotation.DelegatingWebMvcConfiguration
 import java.util.*
+import javax.servlet.http.Cookie
 
 @SpringBootTest(
-    classes = [
-        DgsWebMvcAutoConfiguration::class,
-        DgsAutoConfiguration::class,
-        DelegatingWebMvcConfiguration::class,
-        WebRequestTest.ExampleImplementation::class,
-        WebRequestTest.TestCustomContextBuilder::class
-    ],
+    classes = [DgsWebMvcAutoConfiguration::class, DgsAutoConfiguration::class, WebRequestTest.ExampleImplementation::class, WebRequestTest.TestCustomContextBuilder::class],
     webEnvironment = SpringBootTest.WebEnvironment.MOCK
 )
 @AutoConfigureMockMvc
@@ -71,255 +59,219 @@ class WebRequestTest {
     fun `WebRequest should be available on DgsContext`() {
         mockMvc.perform(
             MockMvcRequestBuilders.post("/graphql")
-                .contentType(MediaType.APPLICATION_JSON)
                 .content("""{"query": "{ usingWebRequest }" }""")
         )
-            .andExpect(status().isOk)
-            .andExpect(jsonPath("$.data.usingWebRequest").value("localhost"))
+            .andExpect(MockMvcResultMatchers.status().isOk)
+            .andExpect(MockMvcResultMatchers.content().json("""{"data":{"usingWebRequest": "localhost"}}"""))
     }
 
     @Test
     fun `@RequestHeader should be available`() {
         mockMvc.perform(
             MockMvcRequestBuilders.post("/graphql")
-                .contentType(MediaType.APPLICATION_JSON)
                 .content("""{"query": "{ usingHeader }" }""")
                 .header("myheader", "hello")
         )
-            .andExpect(status().isOk)
-            .andExpect(jsonPath("$.data.usingHeader").value("hello"))
+            .andExpect(MockMvcResultMatchers.status().isOk)
+            .andExpect(MockMvcResultMatchers.content().json("""{"data":{"usingHeader": "hello"}}"""))
     }
 
     @Test
     fun `@RequestHeader should support defaultValue`() {
         mockMvc.perform(
             MockMvcRequestBuilders.post("/graphql")
-                .contentType(MediaType.APPLICATION_JSON)
                 .content("""{"query": "{ usingHeader }" }""")
         )
-            .andExpect(status().isOk)
-            .andExpect(jsonPath("$.data.usingHeader").value("default header"))
+            .andExpect(MockMvcResultMatchers.status().isOk)
+            .andExpect(MockMvcResultMatchers.content().json("""{"data":{"usingHeader": "default header"}}"""))
     }
 
     @Test
     fun `@RequestHeader should throw an exception when not provided but required and no default is set`() {
         mockMvc.perform(
             MockMvcRequestBuilders.post("/graphql")
-                .contentType(MediaType.APPLICATION_JSON)
                 .content("""{"query": "{ usingRequiredHeader }" }""")
         )
-            .andExpect(status().isOk)
-            .andExpect(
-                jsonPath("$.errors[*].message")
-                    .value(hasItem(containsString("Required request header 'myheader' for method parameter type String is not present")))
-            )
+            .andExpect(MockMvcResultMatchers.status().isOk)
+            .andExpect(MockMvcResultMatchers.content().json("""{"errors":[{"message":"com.netflix.graphql.dgs.exceptions.DgsInvalidInputArgumentException: Required header 'myheader' was not provided","locations":[],"path":["usingRequiredHeader"],"extensions":{"errorType":"INTERNAL"}}],"data":{"usingRequiredHeader":null}}"""))
     }
 
     @Test
     fun `@RequestHeader should use null if not required and not provided`() {
         mockMvc.perform(
             MockMvcRequestBuilders.post("/graphql")
-                .contentType(MediaType.APPLICATION_JSON)
                 .content("""{"query": "{ usingOptionalHeader }" }""")
         )
-            .andExpect(status().isOk)
-            .andExpect(jsonPath("$.data.usingOptionalHeader").value(equalTo("default header from datafetcher")))
+            .andExpect(MockMvcResultMatchers.status().isOk)
+            .andExpect(MockMvcResultMatchers.content().json("""{"data":{"usingOptionalHeader": "default header from datafetcher"}}"""))
     }
 
     @Test
     fun `@RequestHeader should support Optional for not provided values`() {
         mockMvc.perform(
             MockMvcRequestBuilders.post("/graphql")
-                .contentType(MediaType.APPLICATION_JSON)
                 .content("""{"query": "{ usingOptionalHeaderAsOptionalType }" }""")
         )
-            .andExpect(status().isOk)
-            .andExpect(
-                jsonPath("$.data.usingOptionalHeaderAsOptionalType")
-                    .value("default header from Optional")
-            )
+            .andExpect(MockMvcResultMatchers.status().isOk)
+            .andExpect(MockMvcResultMatchers.content().json("""{"data":{"usingOptionalHeaderAsOptionalType": "default header from Optional"}}"""))
     }
 
     @Test
     fun `@RequestHeader should support Optional for provided values`() {
         mockMvc.perform(
             MockMvcRequestBuilders.post("/graphql")
-                .contentType(MediaType.APPLICATION_JSON)
                 .content("""{"query": "{ usingOptionalHeaderAsOptionalType }" }""")
                 .header("myheader", "hello")
         )
-            .andExpect(status().isOk)
-            .andExpect(jsonPath("$.data.usingOptionalHeaderAsOptionalType").value("hello"))
+            .andExpect(MockMvcResultMatchers.status().isOk)
+            .andExpect(MockMvcResultMatchers.content().json("""{"data":{"usingOptionalHeaderAsOptionalType": "hello"}}"""))
     }
 
     @Test
     fun `@RequestParam should be available`() {
         mockMvc.perform(
             MockMvcRequestBuilders.post("/graphql")
-                .contentType(MediaType.APPLICATION_JSON)
                 .content("""{"query": "{ usingParam }" }""")
                 .param("myParam", "paramValue")
         )
-            .andExpect(status().isOk)
-            .andExpect(jsonPath("$.data.usingParam").value("paramValue"))
+            .andExpect(MockMvcResultMatchers.status().isOk)
+            .andExpect(MockMvcResultMatchers.content().json("""{"data":{"usingParam": "paramValue"}}"""))
     }
 
     @Test
     fun `@RequestParam should properly handle multiple param values`() {
         mockMvc.perform(
             MockMvcRequestBuilders.post("/graphql")
-                .contentType(MediaType.APPLICATION_JSON)
                 .content("""{"query": "{ usingParam }" }""")
                 .param("myParam", "paramValue")
                 .param("myParam", "paramValue2")
         )
-            .andExpect(status().isOk)
-            .andExpect(jsonPath("$.data.usingParam").value("paramValue,paramValue2"))
+            .andExpect(MockMvcResultMatchers.status().isOk)
+            .andExpect(MockMvcResultMatchers.content().json("""{"data":{"usingParam": "paramValue, paramValue2"}}"""))
     }
 
     @Test
     fun `@RequestParam should use default when no parameter was provided`() {
         mockMvc.perform(
             MockMvcRequestBuilders.post("/graphql")
-                .contentType(MediaType.APPLICATION_JSON)
                 .content("""{"query": "{ usingParam }" }""")
         )
-            .andExpect(status().isOk)
-            .andExpect(jsonPath("$.data.usingParam").value("default parameter"))
+            .andExpect(MockMvcResultMatchers.status().isOk)
+            .andExpect(MockMvcResultMatchers.content().json("""{"data":{"usingParam": "default parameter"}}"""))
     }
 
     @Test
     fun `@RequestParam should throw exception when no parameter was provided and no default is set`() {
         mockMvc.perform(
             MockMvcRequestBuilders.post("/graphql")
-                .contentType(MediaType.APPLICATION_JSON)
                 .content("""{"query": "{ usingParamRequired }" }""")
         )
-            .andExpect(status().isOk)
-            .andExpect(
-                jsonPath("$.errors[*].message")
-                    .value(hasItem(containsString("Required request parameter 'myParam' for method parameter type String is not present")))
-            )
+            .andExpect(MockMvcResultMatchers.status().isOk)
+            .andExpect(MockMvcResultMatchers.content().json("""{"errors":[{"message":"com.netflix.graphql.dgs.exceptions.DgsInvalidInputArgumentException: Required request parameter 'myParam' was not provided","locations":[],"path":["usingParamRequired"],"extensions":{"errorType":"INTERNAL"}}],"data":{"usingParamRequired":null}}"""))
     }
 
     @Test
     fun `@RequestParam should use null when not required and not provided`() {
         mockMvc.perform(
             MockMvcRequestBuilders.post("/graphql")
-                .contentType(MediaType.APPLICATION_JSON)
                 .content("""{"query": "{ usingOptionalParam }" }""")
         )
-            .andExpect(status().isOk)
-            .andExpect(jsonPath("$.data.usingOptionalParam").value("default from datafetcher"))
+            .andExpect(MockMvcResultMatchers.status().isOk)
+            .andExpect(MockMvcResultMatchers.content().json("""{"data":{"usingOptionalParam": "default from datafetcher"}}"""))
     }
 
     @Test
     fun `@RequestParam should support Optional parameters with non required null values`() {
         mockMvc.perform(
             MockMvcRequestBuilders.post("/graphql")
-                .contentType(MediaType.APPLICATION_JSON)
                 .content("""{"query": "{ usingOptionalParamAsOptionalType }" }""")
         )
-            .andExpect(status().isOk)
-            .andExpect(
-                jsonPath("$.data.usingOptionalParamAsOptionalType")
-                    .value("default param from Optional")
-            )
+            .andExpect(MockMvcResultMatchers.status().isOk)
+            .andExpect(MockMvcResultMatchers.content().json("""{"data":{"usingOptionalParamAsOptionalType": "default param from Optional"}}"""))
     }
 
     @Test
     fun `@RequestParam should support Optional parameters`() {
         mockMvc.perform(
             MockMvcRequestBuilders.post("/graphql")
-                .contentType(MediaType.APPLICATION_JSON)
                 .content("""{"query": "{ usingOptionalParamAsOptionalType }" }""")
                 .param("myParam", "hello")
         )
-            .andExpect(status().isOk)
-            .andExpect(jsonPath("$.data.usingOptionalParamAsOptionalType").value("hello"))
+            .andExpect(MockMvcResultMatchers.status().isOk)
+            .andExpect(MockMvcResultMatchers.content().json("""{"data":{"usingOptionalParamAsOptionalType": "hello"}}"""))
     }
 
     @Test
     fun `Custom context builder should have access to headers`() {
         mockMvc.perform(
             MockMvcRequestBuilders.post("/graphql")
-                .contentType(MediaType.APPLICATION_JSON)
                 .content("""{"query": "{ usingContextWithRequest }" }""")
                 .header("myheader", "hello")
         )
-            .andExpect(status().isOk)
-            .andExpect(jsonPath("$.data.usingContextWithRequest").value("hello"))
+            .andExpect(MockMvcResultMatchers.status().isOk)
+            .andExpect(MockMvcResultMatchers.content().json("""{"data":{"usingContextWithRequest": "hello"}}"""))
     }
 
     @Test
     fun `@CookieValue should give access to cookie`() {
         mockMvc.perform(
             MockMvcRequestBuilders.post("/graphql")
-                .contentType(MediaType.APPLICATION_JSON)
                 .content("""{"query": "{ withCookie }" }""")
                 .cookie(Cookie("myCookie", "cookiehello"))
         )
-            .andExpect(status().isOk)
-            .andExpect(jsonPath("$.data.withCookie").value("cookiehello"))
+            .andExpect(MockMvcResultMatchers.status().isOk)
+            .andExpect(MockMvcResultMatchers.content().json("""{"data":{"withCookie": "cookiehello"}}"""))
     }
 
     @Test
     fun `@CookieValue should allow Optional type`() {
         mockMvc.perform(
             MockMvcRequestBuilders.post("/graphql")
-                .contentType(MediaType.APPLICATION_JSON)
                 .content("""{"query": "{ withOptionalCookie }" }""")
                 .cookie(Cookie("myCookie", "cookiehello"))
         )
-            .andExpect(status().isOk)
-            .andExpect(jsonPath("$.data.withOptionalCookie").value("cookiehello"))
+            .andExpect(MockMvcResultMatchers.status().isOk)
+            .andExpect(MockMvcResultMatchers.content().json("""{"data":{"withOptionalCookie": "cookiehello"}}"""))
     }
 
     @Test
     fun `@CookieValue should allow empty Optional type`() {
         mockMvc.perform(
             MockMvcRequestBuilders.post("/graphql")
-                .contentType(MediaType.APPLICATION_JSON)
                 .content("""{"query": "{ withEmptyOptionalCookie }" }""")
         )
-            .andExpect(status().isOk)
-            .andExpect(jsonPath("$.data.withEmptyOptionalCookie").value("emptycookie"))
+            .andExpect(MockMvcResultMatchers.status().isOk)
+            .andExpect(MockMvcResultMatchers.content().json("""{"data":{"withEmptyOptionalCookie": "emptycookie"}}"""))
     }
 
     @Test
     fun `@CookieValue should allow null when not required`() {
         mockMvc.perform(
             MockMvcRequestBuilders.post("/graphql")
-                .contentType(MediaType.APPLICATION_JSON)
                 .content("""{"query": "{ withEmptyCookie }" }""")
         )
-            .andExpect(status().isOk)
-            .andExpect(jsonPath("$.data.withEmptyCookie").value("emptycookie"))
+            .andExpect(MockMvcResultMatchers.status().isOk)
+            .andExpect(MockMvcResultMatchers.content().json("""{"data":{"withEmptyCookie": "emptycookie"}}"""))
     }
 
     @Test
     fun `@CookieValue should throw exception when required but not set`() {
         mockMvc.perform(
             MockMvcRequestBuilders.post("/graphql")
-                .contentType(MediaType.APPLICATION_JSON)
                 .content("""{"query": "{ withRequiredCookie }" }""")
         )
-            .andExpect(status().isOk)
-            .andExpect(
-                jsonPath("$.errors[*].message")
-                    .value(hasItem(containsString("Required cookie 'myCookie' for method parameter type String is not present")))
-            )
+            .andExpect(MockMvcResultMatchers.status().isOk)
+            .andExpect(MockMvcResultMatchers.content().json("""{"errors":[{"message":"com.netflix.graphql.dgs.exceptions.DgsMissingCookieException: Required cookie 'myCookie' was not provided","locations":[],"path":["withRequiredCookie"],"extensions":{"errorType":"INTERNAL"}}],"data":{"withRequiredCookie":null}}"""))
     }
 
     @Test
     fun `@CookieValue should support default value`() {
         mockMvc.perform(
             MockMvcRequestBuilders.post("/graphql")
-                .contentType(MediaType.APPLICATION_JSON)
                 .content("""{"query": "{ withDefaultCookie }" }""")
         )
-            .andExpect(status().isOk)
-            .andExpect(jsonPath("$.data.withDefaultCookie").value("defaultvalue"))
+            .andExpect(MockMvcResultMatchers.status().isOk)
+            .andExpect(MockMvcResultMatchers.content().json("""{"data":{"withDefaultCookie": "defaultvalue"}}"""))
     }
 
     @DgsComponent
@@ -446,28 +398,32 @@ class WebRequestTest {
 
         @DgsData(parentType = "Query", field = "usingHeader")
         fun usingRequestHeader(
-            @RequestHeader(defaultValue = "default header") myheader: String?
+            @RequestHeader(defaultValue = "default header") myheader: String?,
+            dataFetchingEnvironment: DgsDataFetchingEnvironment
         ): String {
             return myheader ?: "empty"
         }
 
         @DgsData(parentType = "Query", field = "usingRequiredHeader")
         fun usingRequiredRequestHeader(
-            @RequestHeader(required = true) myheader: String
+            @RequestHeader(required = true) myheader: String,
+            dataFetchingEnvironment: DgsDataFetchingEnvironment
         ): String {
             return myheader
         }
 
         @DgsData(parentType = "Query", field = "usingOptionalHeader")
         fun usingOptionalRequestHeader(
-            @RequestHeader(required = false) myheader: String?
+            @RequestHeader(required = false) myheader: String?,
+            dataFetchingEnvironment: DgsDataFetchingEnvironment
         ): String {
             return myheader ?: "default header from datafetcher"
         }
 
         @DgsData(parentType = "Query", field = "usingOptionalHeaderAsOptionalType")
         fun usingOptionalRequestHeader(
-            @RequestHeader(required = false) myheader: Optional<String>
+            @RequestHeader(required = false) myheader: Optional<String>,
+            dataFetchingEnvironment: DgsDataFetchingEnvironment
         ): String {
             return myheader.orElse("default header from Optional")
         }
@@ -480,70 +436,74 @@ class WebRequestTest {
 
         @DgsData(parentType = "Query", field = "usingParam")
         fun usingRequestParam(
-            @RequestParam(defaultValue = "default parameter") myParam: String
+            @RequestParam(defaultValue = "default parameter") myParam: String,
+            dataFetchingEnvironment: DgsDataFetchingEnvironment
         ): String {
             return myParam
         }
 
         @DgsData(parentType = "Query", field = "usingParamRequired")
         fun usingRequestParamRequired(
-            @RequestParam(required = true) myParam: String
+            @RequestParam(required = true) myParam: String,
+            dataFetchingEnvironment: DgsDataFetchingEnvironment
         ): String {
             return myParam
         }
 
         @DgsData(parentType = "Query", field = "usingOptionalParam")
         fun usingOptionalRequestParam(
-            @RequestParam(required = false) myParam: String?
+            @RequestParam(required = false) myParam: String?,
+            dataFetchingEnvironment: DgsDataFetchingEnvironment
         ): String {
             return myParam ?: "default from datafetcher"
         }
 
         @DgsData(parentType = "Query", field = "usingOptionalParamAsOptionalType")
         fun usingOptionalParamAsOptionalType(
-            @RequestParam(required = false) myParam: Optional<String>
+            @RequestParam(required = false) myParam: Optional<String>,
+            dataFetchingEnvironment: DgsDataFetchingEnvironment
         ): String {
             return myParam.orElse("default param from Optional")
         }
 
         @DgsData(parentType = "Query", field = "withCookie")
         fun usingCookie(
-            @CookieValue myCookie: String
+            @CookieValue myCookie: String,
         ): String {
             return myCookie
         }
 
         @DgsData(parentType = "Query", field = "withOptionalCookie")
         fun usingOptionalCookie(
-            @CookieValue myCookie: Optional<String>
+            @CookieValue myCookie: Optional<String>,
         ): String {
             return myCookie.get()
         }
 
         @DgsData(parentType = "Query", field = "withEmptyOptionalCookie")
         fun usingEmptyOptionalCookie(
-            @CookieValue(required = false) myCookie: Optional<String>
+            @CookieValue(required = false) myCookie: Optional<String>,
         ): String {
             return myCookie.orElse("emptycookie")
         }
 
         @DgsData(parentType = "Query", field = "withEmptyCookie")
         fun usingEmptyOptionalCookie(
-            @CookieValue(required = false) myCookie: String?
+            @CookieValue(required = false) myCookie: String?,
         ): String {
             return myCookie ?: "emptycookie"
         }
 
         @DgsData(parentType = "Query", field = "withRequiredCookie")
         fun usingRequiredCookie(
-            @CookieValue(required = true) myCookie: String
+            @CookieValue(required = true) myCookie: String,
         ): String {
             return myCookie
         }
 
         @DgsData(parentType = "Query", field = "withDefaultCookie")
         fun usingCookieWithDefault(
-            @CookieValue(defaultValue = "defaultvalue") myCookie: String
+            @CookieValue(defaultValue = "defaultvalue") myCookie: String,
         ): String {
             return myCookie
         }

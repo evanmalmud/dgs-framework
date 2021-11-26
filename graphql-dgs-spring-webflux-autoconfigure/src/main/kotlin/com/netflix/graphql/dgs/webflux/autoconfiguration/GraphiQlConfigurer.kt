@@ -32,17 +32,17 @@ import java.nio.charset.StandardCharsets
 class GraphiQlConfigurer(private val configProps: DgsWebfluxConfigurationProperties) : WebFluxConfigurer {
     override fun addResourceHandlers(registry: ResourceHandlerRegistry) {
         val graphqlPath = configProps.path
-        val graphiQLTitle = configProps.graphiql.title
         registry
             .addResourceHandler(configProps.graphiql.path + "/**")
-            .addResourceLocations("classpath:/graphiql/")
+            .addResourceLocations("classpath:/static/graphiql/")
             .resourceChain(true)
             .addResolver(PathResourceResolver())
-            .addTransformer(TokenReplacingTransformer(mapOf("<DGS_GRAPHQL_PATH>" to graphqlPath, "<DGS_GRAPHIQL_TITLE>" to graphiQLTitle), configProps))
+            .addTransformer(TokenReplacingTransformer("<DGS_GRAPHQL_PATH>", graphqlPath, configProps))
     }
 
     class TokenReplacingTransformer(
-        private val replaceMap: Map<String, String>,
+        private val replaceToken: String,
+        private val replaceValue: String,
         private val configProps: DgsWebfluxConfigurationProperties
     ) :
         ResourceTransformer {
@@ -54,12 +54,11 @@ class GraphiQlConfigurer(private val configProps: DgsWebfluxConfigurationPropert
             transformerChain: ResourceTransformerChain
         ): Mono<Resource> {
             if (exchange.request.uri.toASCIIString().endsWith(configProps.graphiql.path + "/index.html")) {
-                var content = resource.inputStream.bufferedReader().use(BufferedReader::readText)
-                replaceMap.forEach { content = content.replace(it.key, it.value) }
+                val content = resource.inputStream.bufferedReader().use(BufferedReader::readText)
                 return Mono.just(
                     TransformedResource(
                         resource,
-                        content.toByteArray(
+                        content.replace(replaceToken, replaceValue).toByteArray(
                             StandardCharsets.UTF_8
                         )
                     )

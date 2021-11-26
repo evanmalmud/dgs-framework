@@ -20,7 +20,6 @@ import com.netflix.graphql.dgs.DgsComponent
 import com.netflix.graphql.dgs.DgsQuery
 import com.netflix.graphql.dgs.DgsTypeDefinitionRegistry
 import com.netflix.graphql.dgs.autoconfig.DgsAutoConfiguration
-import com.netflix.graphql.dgs.subscriptions.graphql.sse.DgsGraphQLSSEAutoConfig
 import com.netflix.graphql.dgs.webmvc.autoconfigure.DgsWebMvcAutoConfiguration
 import graphql.language.FieldDefinition
 import graphql.language.ObjectTypeDefinition
@@ -29,10 +28,9 @@ import graphql.schema.idl.TypeDefinitionRegistry
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import org.springframework.boot.autoconfigure.EnableAutoConfiguration
 import org.springframework.boot.autoconfigure.SpringBootApplication
 import org.springframework.boot.test.context.SpringBootTest
-import org.springframework.boot.test.web.server.LocalServerPort
+import org.springframework.boot.web.server.LocalServerPort
 import org.springframework.http.HttpEntity
 import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpMethod
@@ -42,7 +40,6 @@ import org.springframework.web.client.RestTemplate
     classes = [DgsAutoConfiguration::class, DgsWebMvcAutoConfiguration::class, WebClientGraphQLClientTest.TestApp::class],
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT
 )
-@EnableAutoConfiguration(exclude = [DgsGraphQLSSEAutoConfig::class])
 class CustomGraphQLClientTest {
 
     @Suppress("PLATFORM_CLASS_MAPPED_TO_KOTLIN")
@@ -59,7 +56,7 @@ class CustomGraphQLClientTest {
             headers.forEach { httpHeaders.addAll(it.key, it.value) }
 
             val exchange = restTemplate.exchange(url, HttpMethod.POST, HttpEntity(body, httpHeaders), String::class.java)
-            HttpResponse(exchange.statusCode.value(), exchange.body)
+            HttpResponse(exchange.statusCodeValue, exchange.body)
         }
     }
 

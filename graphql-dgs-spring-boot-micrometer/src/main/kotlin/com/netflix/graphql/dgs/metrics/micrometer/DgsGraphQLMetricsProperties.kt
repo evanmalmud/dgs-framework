@@ -1,7 +1,6 @@
 package com.netflix.graphql.dgs.metrics.micrometer
 
 import org.springframework.boot.actuate.autoconfigure.metrics.AutoTimeProperties
-import org.springframework.boot.actuate.autoconfigure.metrics.PropertiesAutoTimer
 import org.springframework.boot.context.properties.ConfigurationProperties
 import org.springframework.boot.context.properties.NestedConfigurationProperty
 import org.springframework.boot.context.properties.bind.DefaultValue
@@ -9,27 +8,17 @@ import org.springframework.boot.context.properties.bind.DefaultValue
 @ConfigurationProperties("management.metrics.dgs-graphql")
 data class DgsGraphQLMetricsProperties(
     /** Auto-timed queries settings. */
-    var autotimeProperties: AutoTimeProperties = AutoTimeProperties(),
-    /** Auto-timer. */
     @NestedConfigurationProperty
-    var autotime: PropertiesAutoTimer = PropertiesAutoTimer(autotimeProperties),
+    var autotime: AutoTimeProperties = AutoTimeProperties(),
     /** Settings that can be used to limit some of the tag metrics used by DGS. */
     @NestedConfigurationProperty
-    var tags: TagsProperties = TagsProperties(),
-    /** Settings to selectively enable/disable gql timers.*/
-    @NestedConfigurationProperty
-    var resolver: ResolverMetricProperties = ResolverMetricProperties(),
-    var query: QueryMetricProperties = QueryMetricProperties()
-
+    var tags: TagsProperties = TagsProperties()
 ) {
 
     data class TagsProperties(
         /** Cardinality limiter settings for this tag. */
         @NestedConfigurationProperty
-        var limiter: CardinalityLimiterProperties = CardinalityLimiterProperties(),
-
-        @NestedConfigurationProperty
-        var complexity: QueryComplexityProperties = QueryComplexityProperties()
+        var limiter: CardinalityLimiterProperties = CardinalityLimiterProperties()
     )
 
     data class CardinalityLimiterProperties(
@@ -40,21 +29,6 @@ data class DgsGraphQLMetricsProperties(
          * The interpretation of this limit depends on the cardinality limiter itself. */
         @DefaultValue("100")
         var limit: Int = 100
-    )
-
-    data class QueryComplexityProperties(
-        @DefaultValue("true")
-        var enabled: Boolean = true
-    )
-
-    data class ResolverMetricProperties(
-        @DefaultValue("true")
-        var enabled: Boolean = true
-    )
-
-    data class QueryMetricProperties(
-        @DefaultValue("true")
-        var enabled: Boolean = true
     )
 
     enum class CardinalityLimiterKind {

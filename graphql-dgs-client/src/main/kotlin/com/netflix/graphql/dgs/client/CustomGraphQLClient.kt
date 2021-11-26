@@ -16,30 +16,21 @@
 
 package com.netflix.graphql.dgs.client
 
-import org.intellij.lang.annotations.Language
-
 /**
  * Blocking implementation of a GraphQL client.
  * The user is responsible for doing the actual HTTP request, making this pluggable with any HTTP client.
  * For a more convenient option, use [WebClientGraphQLClient] instead.
  */
 class CustomGraphQLClient(private val url: String, private val requestExecutor: RequestExecutor) : GraphQLClient {
-    override fun executeQuery(@Language("graphql") query: String): GraphQLResponse {
+    override fun executeQuery(query: String): GraphQLResponse {
         return executeQuery(query, emptyMap(), null)
     }
 
-    override fun executeQuery(
-        @Language("graphql") query: String,
-        variables: Map<String, Any>
-    ): GraphQLResponse {
+    override fun executeQuery(query: String, variables: Map<String, Any>): GraphQLResponse {
         return executeQuery(query, variables, null)
     }
 
-    override fun executeQuery(
-        @Language("graphql") query: String,
-        variables: Map<String, Any>,
-        operationName: String?
-    ): GraphQLResponse {
+    override fun executeQuery(query: String, variables: Map<String, Any>, operationName: String?): GraphQLResponse {
         val serializedRequest = GraphQLClients.objectMapper.writeValueAsString(
             Request(
                 query,

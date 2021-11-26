@@ -18,32 +18,21 @@ package com.netflix.graphql.dgs.webmvc.autoconfigure
 
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Assertions.assertTrue
-import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.web.client.TestRestTemplate
 import org.springframework.http.HttpStatus
-import org.springframework.http.MediaType
-import org.springframework.http.client.ClientHttpRequestInterceptor
 
 @SpringBootTest(
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
     properties = ["dgs.graphql.path=/zuzu", "server.servlet.context-path=/foo"]
 )
 class GraphiQLPathConfigWithCustomGraphQLPathAndServletContextTest(
-    @Autowired private val testRestTemplate: TestRestTemplate
+    @Value("\${local.server.port}") private val serverPort: Int,
+    @Autowired private val restTemplate: TestRestTemplate
 ) {
-
-    @BeforeEach
-    fun setRestTemplateHeaders() {
-        testRestTemplate.restTemplate.interceptors.add(
-            ClientHttpRequestInterceptor { request, body, execution ->
-                request.headers.contentType = MediaType.APPLICATION_JSON
-                return@ClientHttpRequestInterceptor execution.execute(request, body)
-            }
-        )
-    }
 
     @Test
     fun customGraphQLPathAndCustomServletContext() {
@@ -58,13 +47,14 @@ class GraphiQLPathConfigWithCustomGraphQLPathAndServletContextTest(
         Fact4: The graphiql javascript has its fetch replaced w/ "foo/graphql"
         */
 
-        val rootUri = testRestTemplate.rootUri
+        val rootUri = restTemplate.rootUri
+
         // server has been configured with context path
-        assertThat(rootUri).endsWith("/foo")
+        assertTrue(rootUri.endsWith("/foo"))
 
         // graphql not available without context path in uri
         val absPathWithoutContextPath = rootUri.substring(0, rootUri.length - "/foo".length) + "/zuzu"
-        var graphqlResponse = testRestTemplate.getForEntity(
+        var graphqlResponse = restTemplate.getForEntity(
             absPathWithoutContextPath,
             String::class.java
         )
@@ -72,17 +62,17 @@ class GraphiQLPathConfigWithCustomGraphQLPathAndServletContextTest(
 
         // graphql is available with context path in uri (400 expected as we don't sent proper request)
         val absPathWithContextPath = "$rootUri/zuzu"
-        graphqlResponse = testRestTemplate.getForEntity(
+        graphqlResponse = restTemplate.getForEntity(
             absPathWithContextPath,
             String::class.java
         )
         assertThat(graphqlResponse.statusCodeValue).isEqualTo(HttpStatus.BAD_REQUEST.value())
 
-        val graphiqlResponse = testRestTemplate.getForEntity(
+        val graphiqlResponse = restTemplate.getForEntity(
             "/graphiql",
             String::class.java
         )
         assertTrue(graphiqlResponse.statusCode.is2xxSuccessful)
-        assertThat(graphiqlResponse.body).isNotNull.contains("fetch(origin + '/foo/zuzu'")
+        assertThat(graphiqlResponse.body).isNotNull.contains("fetch('/foo/zuzu'")
     }
 }

@@ -16,45 +16,28 @@
 
 package com.netflix.graphql.dgs.webflux.autoconfiguration
 
-import jakarta.annotation.PostConstruct
 import org.springframework.boot.context.properties.ConfigurationProperties
+import org.springframework.boot.context.properties.ConstructorBinding
 import org.springframework.boot.context.properties.NestedConfigurationProperty
 import org.springframework.boot.context.properties.bind.DefaultValue
-import java.time.Duration
+import javax.annotation.PostConstruct
 
+@ConstructorBinding
 @ConfigurationProperties(prefix = "dgs.graphql")
 @Suppress("ConfigurationProperties")
 class DgsWebfluxConfigurationProperties(
-    /** Websocket configuration. */
-    @NestedConfigurationProperty var websocket: DgsWebsocketConfigurationProperties = DgsWebsocketConfigurationProperties(
-        DEFAULT_CONNECTION_INIT_TIMEOUT_DURATION
-    ),
     /** Path to the endpoint that will serve GraphQL requests. */
     @DefaultValue("/graphql") var path: String = "/graphql",
     @NestedConfigurationProperty var graphiql: DgsGraphiQLConfigurationProperties = DgsGraphiQLConfigurationProperties(),
     @NestedConfigurationProperty var schemaJson: DgsSchemaJsonConfigurationProperties = DgsSchemaJsonConfigurationProperties()
 ) {
     /**
-     *  Configuration properties for websockets.
-     */
-    data class DgsWebsocketConfigurationProperties(
-        /** Connection Initialization timeout for graphql-transport-ws. */
-        @DefaultValue(DEFAULT_CONNECTION_INIT_TIMEOUT) var connectionInitTimeout: Duration,
-        /** Path to the Subscriptions endpoint without trailing slash. */
-        @DefaultValue("/subscriptions") var path: String = "/subscriptions"
-    )
-
-    /**
      * Configuration properties for the GraphiQL endpoint.
      */
     data class DgsGraphiQLConfigurationProperties(
-        @DefaultValue("true") var enabled: Boolean = true,
         /** Path to the GraphiQL endpoint without trailing slash. */
-        @DefaultValue("/graphiql") var path: String = "/graphiql",
-        /** GraphiQL title */
-        @DefaultValue("Simple GraphiQL Example") var title: String = "Simple GraphiQL Example"
+        @DefaultValue("/graphiql") var path: String = "/graphiql"
     )
-
     /**
      * Configuration properties for the schema-json endpoint.
      */
@@ -68,17 +51,11 @@ class DgsWebfluxConfigurationProperties(
         validatePath(this.path, "dgs.graphql.path")
         validatePath(this.graphiql.path, "dgs.graphql.graphiql.path")
         validatePath(this.schemaJson.path, "dgs.graphql.schema-json.path")
-        validatePath(this.websocket.path, "dgs.graphql.websocket.path")
     }
 
     private fun validatePath(path: String, pathProperty: String) {
         if (path != "/" && (!path.startsWith("/") || path.endsWith("/"))) {
             throw IllegalArgumentException("$pathProperty must start with '/' and not end with '/' but was '$path'")
         }
-    }
-
-    companion object {
-        const val DEFAULT_CONNECTION_INIT_TIMEOUT = "10s"
-        val DEFAULT_CONNECTION_INIT_TIMEOUT_DURATION: Duration = Duration.ofSeconds(10)
     }
 }

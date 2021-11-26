@@ -17,11 +17,8 @@
 package com.netflix.graphql.dgs
 
 import com.netflix.graphql.dgs.internal.DgsSchemaProvider
-import com.netflix.graphql.dgs.internal.method.DataFetchingEnvironmentArgumentResolver
-import com.netflix.graphql.dgs.internal.method.MethodDataFetcherFactory
 import graphql.GraphQL
-import graphql.Scalars
-import graphql.schema.DataFetchingEnvironment
+import graphql.language.StringValue
 import io.mockk.every
 import io.mockk.impl.annotations.MockK
 import io.mockk.junit5.MockKExtension
@@ -39,9 +36,10 @@ class DataFetcherWithDirectivesTest {
 
     @Test
     fun addFetchersWithConvertedArguments() {
+
         val queryFetcher = object : Any() {
             @DgsData(parentType = "Query", field = "hello")
-            fun hellOFetcher(dataFetchingEnvironment: DataFetchingEnvironment): String {
+            fun hellOFetcher(dataFetchingEnvironment: DgsDataFetchingEnvironment): String {
                 assertThat(dataFetchingEnvironment.fieldDefinition.directives)
                     .hasSize(1)
                     .first()
@@ -51,10 +49,12 @@ class DataFetcherWithDirectivesTest {
                 val graphQLArgument =
                     dataFetchingEnvironment.fieldDefinition.directives.first().arguments.first()
 
-                assertThat(graphQLArgument.toAppliedArgument().hasSetValue()).isTrue
-                assertThat(graphQLArgument.toAppliedArgument().type).isEqualTo(Scalars.GraphQLString)
+                assertThat(graphQLArgument.argumentValue)
+                    .isNotNull
+                    .extracting { it.value }
+                    .isInstanceOf(StringValue::class.java)
 
-                val value = graphQLArgument.toAppliedArgument().getValue<String>()
+                val value = (graphQLArgument.argumentValue.value as StringValue).value
                 assertThat(value).isEqualTo("some name")
                 return "hello $value"
             }
@@ -64,13 +64,7 @@ class DataFetcherWithDirectivesTest {
         every { applicationContextMock.getBeansWithAnnotation(DgsScalar::class.java) } returns emptyMap()
         every { applicationContextMock.getBeansWithAnnotation(DgsDirective::class.java) } returns emptyMap()
 
-        val provider = DgsSchemaProvider(
-            applicationContext = applicationContextMock,
-            federationResolver = Optional.empty(),
-            existingTypeDefinitionRegistry = Optional.empty(),
-            methodDataFetcherFactory = MethodDataFetcherFactory(listOf(DataFetchingEnvironmentArgumentResolver()))
-        )
-
+        val provider = DgsSchemaProvider(applicationContextMock, Optional.empty(), Optional.empty(), Optional.empty())
         val schema = provider.schema(
             """
             directive @someDirective(name: String) on FIELD_DEFINITION

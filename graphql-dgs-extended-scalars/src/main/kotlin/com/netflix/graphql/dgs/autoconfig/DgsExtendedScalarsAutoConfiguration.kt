@@ -21,14 +21,10 @@ import com.netflix.graphql.dgs.DgsRuntimeWiring
 import graphql.scalars.ExtendedScalars
 import graphql.schema.GraphQLScalarType
 import graphql.schema.idl.RuntimeWiring
-import org.springframework.boot.autoconfigure.AutoConfiguration
-import org.springframework.boot.autoconfigure.condition.AllNestedConditions
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.context.annotation.Bean
-import org.springframework.context.annotation.Conditional
 import org.springframework.context.annotation.Configuration
-import org.springframework.context.annotation.ConfigurationCondition
 
 @ConditionalOnClass(graphql.scalars.ExtendedScalars::class)
 @ConditionalOnProperty(
@@ -37,7 +33,7 @@ import org.springframework.context.annotation.ConfigurationCondition
     havingValue = "true",
     matchIfMissing = true
 )
-@AutoConfiguration
+@Configuration(proxyBeanMethods = false)
 open class DgsExtendedScalarsAutoConfiguration {
 
     @ConditionalOnProperty(
@@ -55,8 +51,7 @@ open class DgsExtendedScalarsAutoConfiguration {
                     return listOf(
                         ExtendedScalars.DateTime,
                         ExtendedScalars.Date,
-                        ExtendedScalars.Time,
-                        ExtendedScalars.LocalTime
+                        ExtendedScalars.Time
                     )
                 }
             }
@@ -79,7 +74,7 @@ open class DgsExtendedScalarsAutoConfiguration {
                         ExtendedScalars.Object,
                         ExtendedScalars.Json,
                         ExtendedScalars.Url,
-                        ExtendedScalars.Locale
+                        ExtendedScalars.Locale,
                     )
                 }
             }
@@ -112,111 +107,10 @@ open class DgsExtendedScalarsAutoConfiguration {
                         // Others
                         ExtendedScalars.GraphQLLong,
                         ExtendedScalars.GraphQLShort,
-                        ExtendedScalars.GraphQLByte
+                        ExtendedScalars.GraphQLByte,
+                        ExtendedScalars.GraphQLBigDecimal,
+                        ExtendedScalars.GraphQLBigInteger
                     )
-                }
-            }
-        }
-
-        @Conditional(OnBigDecimalAndNumbers::class)
-        @Configuration(proxyBeanMethods = false)
-        open class BigDecimalAutoConfiguration {
-            @Bean
-            open fun bigDecimalExtendedScalarsRegistrar(): ExtendedScalarRegistrar {
-                return object : AbstractExtendedScalarRegistrar() {
-                    override fun getScalars(): List<GraphQLScalarType> {
-                        return listOf(
-                            // Others
-                            ExtendedScalars.GraphQLBigDecimal
-                        )
-                    }
-                }
-            }
-        }
-
-        open class OnBigDecimalAndNumbers :
-            AllNestedConditions(ConfigurationCondition.ConfigurationPhase.PARSE_CONFIGURATION) {
-            @ConditionalOnProperty(
-                prefix = "dgs.graphql.extensions.scalars.numbers.",
-                name = ["enabled"],
-                havingValue = "true",
-                matchIfMissing = true
-            )
-            open class OnNumbers
-
-            @ConditionalOnProperty(
-                prefix = "dgs.graphql.extensions.scalars.numbers.bigdecimal",
-                name = ["enabled"],
-                havingValue = "true",
-                matchIfMissing = true
-            )
-            open class OnBigDecimal
-        }
-
-        @Conditional(OnBigIntegerAndNumbers::class)
-        @Configuration(proxyBeanMethods = false)
-        open class BigIntegerAutoConfiguration {
-            @Bean
-            open fun bigIntegerExtendedScalarsRegistrar(): ExtendedScalarRegistrar {
-                return object : AbstractExtendedScalarRegistrar() {
-                    override fun getScalars(): List<GraphQLScalarType> {
-                        return listOf(ExtendedScalars.GraphQLBigInteger)
-                    }
-                }
-            }
-        }
-
-        open class OnBigIntegerAndNumbers :
-            AllNestedConditions(ConfigurationCondition.ConfigurationPhase.PARSE_CONFIGURATION) {
-            @ConditionalOnProperty(
-                prefix = "dgs.graphql.extensions.scalars.numbers.",
-                name = ["enabled"],
-                havingValue = "true",
-                matchIfMissing = true
-            )
-            open class OnNumbers
-
-            @ConditionalOnProperty(
-                prefix = "dgs.graphql.extensions.scalars.numbers.biginteger",
-                name = ["enabled"],
-                havingValue = "true",
-                matchIfMissing = true
-            )
-            open class OnBigInteger
-        }
-    }
-
-    @ConditionalOnProperty(
-        prefix = "dgs.graphql.extensions.scalars.currency",
-        name = ["enabled"],
-        havingValue = "true",
-        matchIfMissing = true
-    )
-    @Configuration(proxyBeanMethods = false)
-    open class CurrencyExtendedScalarsRegistrar {
-        @Bean
-        open fun currencyExtendedScalarsRegistrar(): ExtendedScalarRegistrar {
-            return object : AbstractExtendedScalarRegistrar() {
-                override fun getScalars(): List<GraphQLScalarType> {
-                    return listOf(ExtendedScalars.Currency)
-                }
-            }
-        }
-    }
-
-    @ConditionalOnProperty(
-        prefix = "dgs.graphql.extensions.scalars.country",
-        name = ["enabled"],
-        havingValue = "true",
-        matchIfMissing = true
-    )
-    @Configuration(proxyBeanMethods = false)
-    open class CountryExtendedScalarsRegistrar {
-        @Bean
-        open fun countryCodeExtendedScalarsRegistrar(): ExtendedScalarRegistrar {
-            return object : AbstractExtendedScalarRegistrar() {
-                override fun getScalars(): List<GraphQLScalarType> {
-                    return listOf(ExtendedScalars.CountryCode)
                 }
             }
         }
@@ -235,24 +129,6 @@ open class DgsExtendedScalarsAutoConfiguration {
             return object : AbstractExtendedScalarRegistrar() {
                 override fun getScalars(): List<GraphQLScalarType> {
                     return listOf(ExtendedScalars.GraphQLChar)
-                }
-            }
-        }
-    }
-
-    @ConditionalOnProperty(
-        prefix = "dgs.graphql.extensions.scalars.ids",
-        name = ["enabled"],
-        havingValue = "true",
-        matchIfMissing = true
-    )
-    @Configuration(proxyBeanMethods = false)
-    open class IDsExtendedScalarsAutoConfiguration {
-        @Bean
-        open fun idsExtendedScalarsRegistrar(): ExtendedScalarRegistrar {
-            return object : AbstractExtendedScalarRegistrar() {
-                override fun getScalars(): List<GraphQLScalarType> {
-                    return listOf(ExtendedScalars.UUID)
                 }
             }
         }

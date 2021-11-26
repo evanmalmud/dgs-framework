@@ -55,18 +55,15 @@ class DgsPaginationTypeDefinitionRegistryTest {
         assertThat(addedDirective).isNotNull
         assertThat(addedDirective!!.directiveLocations[0].name).isEqualTo(Introspection.DirectiveLocation.OBJECT.name)
 
-        val movieConnectionType = (paginatedTypeRegistry.types()["MovieConnection"] as ObjectTypeDefinition)
-        assertThat(movieConnectionType).isNotNull.extracting { it.description }.isNotNull
-        val movieEdgeType = (paginatedTypeRegistry.types()["MovieEdge"] as ObjectTypeDefinition)
-        assertThat(movieEdgeType).isNotNull.extracting { it.description }.isNotNull
-        val pageInfoType = (paginatedTypeRegistry.types()["PageInfo"] as ObjectTypeDefinition)
-        assertThat(pageInfoType).isNotNull.extracting { it.description }.isNotNull
+        assertThat(paginatedTypeRegistry.types()["MovieConnection"]).isNotNull
+        assertThat(paginatedTypeRegistry.types()["MovieEdge"]).isNotNull
+        assertThat(paginatedTypeRegistry.types()["PageInfo"]).isNotNull
 
         val movieConnection = (paginatedTypeRegistry.types()["MovieConnection"] as ObjectTypeDefinition)
         val edgesField = movieConnection.fieldDefinitions.find { it.name == "edges" } as FieldDefinition
         assertThat(edgesField.type.toString()).isEqualTo(ListType(TypeName("MovieEdge")).toString())
         val pageInfoField = movieConnection.fieldDefinitions.find { it.name == "pageInfo" } as FieldDefinition
-        assertThat(pageInfoField.type.toString()).isEqualTo(NonNullType(TypeName("PageInfo")).toString())
+        assertThat(pageInfoField.type.toString()).isEqualTo(TypeName("PageInfo").toString())
 
         val movieEdge = (paginatedTypeRegistry.types()["MovieEdge"] as ObjectTypeDefinition)
         val cursorField = movieEdge.fieldDefinitions.find { it.name == "cursor" } as FieldDefinition
@@ -108,10 +105,8 @@ class DgsPaginationTypeDefinitionRegistryTest {
         val typeRegistry = SchemaParser().parse(schema)
         val paginatedTypeRegistry = paginationTypeRegistry.registry(typeRegistry)
 
-        val movieConnectionType = (paginatedTypeRegistry.types()["MovieConnection"] as ObjectTypeDefinition)
-        assertThat(movieConnectionType).isNotNull.extracting { it.description }.isNotNull
-        val movieEdgeType = (paginatedTypeRegistry.types()["MovieEdge"] as ObjectTypeDefinition)
-        assertThat(movieEdgeType).isNotNull.extracting { it.description }.isNotNull
+        assertThat(paginatedTypeRegistry.types()["MovieConnection"]).isNotNull
+        assertThat(paginatedTypeRegistry.types()["MovieEdge"]).isNotNull
         assertThat(paginatedTypeRegistry.types()["PageInfo"]).isNull()
     }
 
@@ -137,16 +132,11 @@ class DgsPaginationTypeDefinitionRegistryTest {
         val typeRegistry = SchemaParser().parse(schema)
         val paginatedTypeRegistry = paginationTypeRegistry.registry(typeRegistry)
 
-        val movieConnectionType = (paginatedTypeRegistry.types()["IMovieConnection"] as ObjectTypeDefinition)
-        assertThat(movieConnectionType).isNotNull.extracting { it.description }.isNotNull
-        val movieEdgeType = (paginatedTypeRegistry.types()["IMovieEdge"] as ObjectTypeDefinition)
-        assertThat(movieEdgeType).isNotNull.extracting { it.description }.isNotNull
-        val scaryMovieConnectionType = (paginatedTypeRegistry.types()["ScaryMovieConnection"] as ObjectTypeDefinition)
-        assertThat(scaryMovieConnectionType).isNotNull.extracting { it.description }.isNotNull
-        val scaryMovieEdgeType = (paginatedTypeRegistry.types()["ScaryMovieEdge"] as ObjectTypeDefinition)
-        assertThat(scaryMovieEdgeType).isNotNull.extracting { it.description }.isNotNull
-        val pageInfoType = (paginatedTypeRegistry.types()["PageInfo"] as ObjectTypeDefinition)
-        assertThat(pageInfoType).isNotNull.extracting { it.description }.isNotNull
+        assertThat(paginatedTypeRegistry.types()["IMovieConnection"]).isNotNull
+        assertThat(paginatedTypeRegistry.types()["IMovieEdge"]).isNotNull
+        assertThat(paginatedTypeRegistry.types()["ScaryMovieConnection"]).isNotNull
+        assertThat(paginatedTypeRegistry.types()["ScaryMovieEdge"]).isNotNull
+        assertThat(paginatedTypeRegistry.types()["PageInfo"]).isNotNull
     }
 
     @Test
@@ -164,36 +154,5 @@ class DgsPaginationTypeDefinitionRegistryTest {
 
         assertThat(paginatedTypeRegistry.types()["CustomScalarConnection"]).isNull()
         assertThat(paginatedTypeRegistry.types()["CustomScalarEdge"]).isNull()
-    }
-
-    @Test
-    fun generateForUnions() {
-        val schema = """
-            type Query {
-                something: IMovieConnection
-            }
-            
-            union IMovie @connection = ScaryMovie
-            
-            type ScaryMovie implements IMovie @connection {
-               movieID: ID
-               title: String
-               rating: Integer
-            }
-        """.trimIndent()
-
-        val typeRegistry = SchemaParser().parse(schema)
-        val paginatedTypeRegistry = paginationTypeRegistry.registry(typeRegistry)
-
-        val movieConnectionType = (paginatedTypeRegistry.types()["IMovieConnection"] as ObjectTypeDefinition)
-        assertThat(movieConnectionType).isNotNull.extracting { it.description }.isNotNull
-        val movieEdgeType = (paginatedTypeRegistry.types()["IMovieEdge"] as ObjectTypeDefinition)
-        assertThat(movieEdgeType).isNotNull.extracting { it.description }.isNotNull
-        val scaryMovieConnectionType = (paginatedTypeRegistry.types()["ScaryMovieConnection"] as ObjectTypeDefinition)
-        assertThat(scaryMovieConnectionType).isNotNull.extracting { it.description }.isNotNull
-        val scaryMovieEdgeType = (paginatedTypeRegistry.types()["ScaryMovieConnection"] as ObjectTypeDefinition)
-        assertThat(scaryMovieEdgeType).isNotNull.extracting { it.description }.isNotNull
-        val pageInfoType = (paginatedTypeRegistry.types()["ScaryMovieConnection"] as ObjectTypeDefinition)
-        assertThat(pageInfoType).isNotNull.extracting { it.description }.isNotNull
     }
 }

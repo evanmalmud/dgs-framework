@@ -23,23 +23,16 @@ import com.netflix.graphql.dgs.DgsScalar
 import com.netflix.graphql.dgs.exceptions.QueryException
 import com.netflix.graphql.dgs.internal.DgsDataLoaderProvider
 import com.netflix.graphql.dgs.internal.DgsSchemaProvider
-import com.netflix.graphql.dgs.internal.FlowDataFetcherResultProcessor
-import com.netflix.graphql.dgs.internal.FluxDataFetcherResultProcessor
-import com.netflix.graphql.dgs.internal.MonoDataFetcherResultProcessor
-import com.netflix.graphql.dgs.internal.method.MethodDataFetcherFactory
 import com.netflix.graphql.dgs.reactive.internal.DefaultDgsReactiveGraphQLContextBuilder
 import com.netflix.graphql.dgs.reactive.internal.DefaultDgsReactiveQueryExecutor
+import com.netflix.graphql.dgs.reactive.internal.FluxDataFetcherResultProcessor
+import com.netflix.graphql.dgs.reactive.internal.MonoDataFetcherResultProcessor
 import graphql.execution.AsyncExecutionStrategy
 import graphql.execution.AsyncSerialExecutionStrategy
-import graphql.execution.instrumentation.SimplePerformantInstrumentation
-import io.mockk.Runs
+import graphql.execution.instrumentation.ChainedInstrumentation
 import io.mockk.every
 import io.mockk.impl.annotations.MockK
 import io.mockk.junit5.MockKExtension
-import io.mockk.just
-import io.mockk.verify
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.flow
 import org.assertj.core.api.Assertions.assertThat
 import org.dataloader.DataLoaderRegistry
 import org.junit.jupiter.api.BeforeEach
@@ -49,12 +42,9 @@ import org.springframework.context.ApplicationContext
 import reactor.core.publisher.Flux
 import reactor.core.publisher.Mono
 import reactor.test.StepVerifier
-import reactor.util.context.Context
-import reactor.util.context.ContextView
 import java.time.Duration
 import java.time.LocalDateTime
 import java.util.*
-import java.util.function.Consumer
 import java.util.function.Supplier
 
 @ExtendWith(MockKExtension::class)
@@ -65,30 +55,22 @@ internal class ReactiveReturnTypesTest {
     @MockK
     lateinit var dgsDataLoaderProvider: DgsDataLoaderProvider
 
-    @MockK
-    lateinit var stubContextConsumer: Consumer<ContextView>
-
     lateinit var dgsQueryExecutor: DefaultDgsReactiveQueryExecutor
 
     @BeforeEach
     fun createExecutor() {
+
         val fetcher = object : Any() {
             @DgsData(parentType = "Query", field = "hello")
             fun hello(): Mono<String> {
-                return Mono.deferContextual { context ->
-                    stubContextConsumer.accept(context)
-                    Mono.just("hi!")
-                }
+                return Mono.just("hi!")
             }
         }
 
         val numbersFetcher = object : Any() {
             @DgsData(parentType = "Query", field = "numbers")
-            fun numbers(): Flux<Int> {
-                return Flux.deferContextual { context ->
-                    stubContextConsumer.accept(context)
-                    Flux.interval(Duration.ofMillis(1)).map { it.toInt() }.take(5)
-                }
+            fun hello(): Flux<Int> {
+                return Flux.interval(Duration.ofMillis(1)).map { it.toInt() }.take(5)
             }
         }
 
@@ -106,25 +88,14 @@ internal class ReactiveReturnTypesTest {
             }
         }
 
-        val fetcherWithFlow = object : Any() {
-            @DgsData(parentType = "Query", field = "flow")
-            fun withFlow(): Flow<String> {
-                return flow {
-                    emit("one")
-                    emit("two")
-                    emit("three")
-                }
-            }
-        }
-
-        every { stubContextConsumer.accept(any()) } just Runs
-
         every { applicationContextMock.getBeansWithAnnotation(DgsComponent::class.java) } returns mapOf(
-            Pair("helloFetcher", fetcher),
+            Pair(
+                "helloFetcher",
+                fetcher
+            ),
             Pair("numbersFetcher", numbersFetcher),
             Pair("moviesFetcher", moviesFetcher),
-            Pair("withErrorFetcher", fetcherWithError),
-            Pair("flowFetcher", fetcherWithFlow)
+            Pair("withErrorFetcher", fetcherWithError)
         )
         every { applicationContextMock.getBeansWithAnnotation(DgsScalar::class.java) } returns mapOf(
             Pair(
@@ -139,13 +110,9 @@ internal class ReactiveReturnTypesTest {
             applicationContextMock,
             federationResolver = Optional.empty(),
             existingTypeDefinitionRegistry = Optional.empty(),
-            schemaLocations = listOf(DgsSchemaProvider.DEFAULT_SCHEMA_LOCATION),
-            dataFetcherResultProcessors = listOf(
-                MonoDataFetcherResultProcessor(),
-                FluxDataFetcherResultProcessor(),
-                FlowDataFetcherResultProcessor()
-            ),
-            methodDataFetcherFactory = MethodDataFetcherFactory(listOf())
+            mockProviders = Optional.empty(),
+            listOf(DgsSchemaProvider.DEFAULT_SCHEMA_LOCATION),
+            listOf(MonoDataFetcherResultProcessor(), FluxDataFetcherResultProcessor()),
         )
 
         val schema = provider.schema(
@@ -155,7 +122,6 @@ internal class ReactiveReturnTypesTest {
                 numbers: [Int]
                 movies: [Movie]
                 withError: String
-                flow: [String]
             }
 
             type Movie {
@@ -172,14 +138,11 @@ internal class ReactiveReturnTypesTest {
         )
 
         dgsQueryExecutor = DefaultDgsReactiveQueryExecutor(
-            defaultSchema = schema,
-            schemaProvider = provider,
-            dataLoaderProvider = dgsDataLoaderProvider,
-            contextBuilder = DefaultDgsReactiveGraphQLContextBuilder(Optional.empty()),
-            instrumentation = SimplePerformantInstrumentation.INSTANCE,
-            queryExecutionStrategy = AsyncExecutionStrategy(),
-            mutationExecutionStrategy = AsyncSerialExecutionStrategy(),
-            idProvider = Optional.empty()
+            schema, provider, dgsDataLoaderProvider,
+            DefaultDgsReactiveGraphQLContextBuilder(
+                Optional.empty()
+            ),
+            ChainedInstrumentation(), AsyncExecutionStrategy(), AsyncSerialExecutionStrategy(), Optional.empty()
         )
     }
 
@@ -192,28 +155,10 @@ internal class ReactiveReturnTypesTest {
             }
             """.trimIndent(),
             "data.hello"
-        ).contextWrite(dummyContext())
+        )
 
         StepVerifier.create(helloResult).assertNext {
             assertThat(it).isEqualTo("hi!")
-        }.verifyComplete()
-        verify { stubContextConsumer.accept(match(comparingDummyContext())) }
-    }
-
-    @Test
-    fun `extract json with flow`() {
-        val flowResult = dgsQueryExecutor.executeAndExtractJsonPath<List<String>>(
-            """
-            {
-                flow
-            }
-            """.trimIndent(),
-            "data.flow"
-        ).contextWrite(dummyContext())
-
-        val step = StepVerifier.create(flowResult)
-        step.assertNext {
-            assertThat(it).isEqualTo(listOf("one", "two", "three"))
         }.verifyComplete()
     }
 
@@ -226,13 +171,12 @@ internal class ReactiveReturnTypesTest {
             }
             """.trimIndent(),
             "data.numbers"
-        ).contextWrite(dummyContext())
+        )
 
         val step = StepVerifier.create(numbers)
         step.assertNext {
             assertThat(it).isEqualTo(listOf(0, 1, 2, 3, 4))
         }.verifyComplete()
-        verify { stubContextConsumer.accept(match(comparingDummyContext())) }
     }
 
     @Test
@@ -265,12 +209,6 @@ internal class ReactiveReturnTypesTest {
         )
 
         StepVerifier.create(withError).verifyError(QueryException::class.java)
-    }
-
-    private fun dummyContext() = Context.of("some-key", "some context value")
-
-    private fun comparingDummyContext() = { context: ContextView ->
-        context.size() == 1 && context.get<String>("some-key") == "some context value"
     }
 
     private data class Movie(val title: String, val releaseDate: LocalDateTime?)

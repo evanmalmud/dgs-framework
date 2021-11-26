@@ -6,7 +6,6 @@ import com.netflix.graphql.dgs.metrics.DgsMetrics.GqlMetric
 import com.netflix.graphql.dgs.metrics.DgsMetrics.GqlTag
 import com.netflix.graphql.dgs.metrics.micrometer.tagging.DgsGraphQLMetricsTagsProvider
 import com.netflix.graphql.dgs.metrics.micrometer.utils.QuerySignatureRepository
-import com.netflix.graphql.types.errors.ErrorType
 import graphql.ExecutionInput
 import graphql.ExecutionResult
 import graphql.GraphQLError
@@ -14,14 +13,10 @@ import graphql.InvalidSyntaxError
 import graphql.analysis.QueryTraverser
 import graphql.analysis.QueryVisitorFieldEnvironment
 import graphql.analysis.QueryVisitorStub
-import graphql.execution.instrumentation.InstrumentationContext
-import graphql.execution.instrumentation.InstrumentationState
-import graphql.execution.instrumentation.SimpleInstrumentationContext
-import graphql.execution.instrumentation.SimpleInstrumentationContext.noOp
-import graphql.execution.instrumentation.SimplePerformantInstrumentation
-import graphql.execution.instrumentation.parameters.InstrumentationCreateStateParameters
-import graphql.execution.instrumentation.parameters.InstrumentationExecuteOperationParameters
+import graphql.execution.instrumentation.*
+import graphql.execution.instrumentation.SimpleInstrumentationContext.whenCompleted
 import graphql.execution.instrumentation.parameters.InstrumentationExecutionParameters
+import graphql.execution.instrumentation.parameters.InstrumentationExecutionStrategyParameters
 import graphql.execution.instrumentation.parameters.InstrumentationFieldFetchParameters
 import graphql.execution.instrumentation.parameters.InstrumentationValidationParameters
 import graphql.schema.DataFetcher
@@ -30,10 +25,12 @@ import graphql.schema.GraphQLObjectType
 import graphql.validation.ValidationError
 import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.Tag
+import io.micrometer.core.instrument.Tags
 import io.micrometer.core.instrument.Timer
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
-import java.util.Optional
+import java.util.*
+import java.util.Optional.*
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CompletionStage
 
@@ -43,72 +40,76 @@ class DgsGraphQLMetricsInstrumentation(
     private val tagsProvider: DgsGraphQLMetricsTagsProvider,
     private val properties: DgsGraphQLMetricsProperties,
     private val limitedTagMetricResolver: LimitedTagMetricResolver,
-    private val optQuerySignatureRepository: Optional<QuerySignatureRepository> = Optional.empty()
-) : SimplePerformantInstrumentation() {
+    private val optQuerySignatureRepository: Optional<QuerySignatureRepository> = empty()
+) : SimpleInstrumentation() {
 
     companion object {
         private val log: Logger = LoggerFactory.getLogger(DgsGraphQLMetricsInstrumentation::class.java)
+
+        private object DefaultExecutionStrategyInstrumentationContext : ExecutionStrategyInstrumentationContext {
+            override fun onDispatched(result: CompletableFuture<ExecutionResult>) {
+            }
+
+            override fun onCompleted(result: ExecutionResult?, t: Throwable?) {
+            }
+        }
     }
 
-    override fun createState(parameters: InstrumentationCreateStateParameters): InstrumentationState {
+    override fun createState(): InstrumentationState {
         return MetricsInstrumentationState(
             registrySupplier.get(),
             limitedTagMetricResolver
         )
     }
 
-    override fun beginExecution(
-        parameters: InstrumentationExecutionParameters,
-        state: InstrumentationState
-    ): InstrumentationContext<ExecutionResult> {
-        if (!properties.query.enabled) {
-            return noOp()
-        }
+    override fun beginExecution(parameters: InstrumentationExecutionParameters): InstrumentationContext<ExecutionResult> {
+        val state: MetricsInstrumentationState = parameters.getInstrumentationState()
+        state.startTimer()
 
-        val miState: MetricsInstrumentationState = state as MetricsInstrumentationState
-        miState.startTimer()
+        state.operationName = ofNullable(parameters.operation)
+        state.isIntrospectionQuery = QueryUtils.isIntrospectionQuery(parameters.executionInput)
 
-        miState.operationName = Optional.ofNullable(parameters.operation)
-        miState.isIntrospectionQuery = QueryUtils.isIntrospectionQuery(parameters.executionInput)
+        return object : SimpleInstrumentationContext<ExecutionResult>() {
 
-        return SimpleInstrumentationContext.whenCompleted { result, exc ->
-            val tags = tagsProvider.getContextualTags() +
-                tagsProvider.getExecutionTags(miState, parameters, result, exc) +
-                miState.tags()
-            miState.stopTimer(
-                properties.autotime
-                    .builder(GqlMetric.QUERY.key)
-                    .tags(tags)
-            )
+            override fun onDispatched(result: CompletableFuture<ExecutionResult>?) {
+                super.onDispatched(result)
+            }
+
+            override fun onCompleted(result: ExecutionResult, exc: Throwable?) {
+                state.stopTimer(
+                    properties.autotime
+                        .builder(GqlMetric.QUERY.key)
+                        .tags(tagsProvider.getContextualTags())
+                        .tags(tagsProvider.getExecutionTags(parameters, result, exc))
+                        .tags(state.tags())
+                )
+            }
         }
     }
 
     override fun instrumentExecutionResult(
         executionResult: ExecutionResult,
-        parameters: InstrumentationExecutionParameters,
-        state: InstrumentationState
+        parameters: InstrumentationExecutionParameters
     ): CompletableFuture<ExecutionResult> {
-        val miState: MetricsInstrumentationState = state as MetricsInstrumentationState
-        val baseTags = tagsProvider.getContextualTags() +
-            tagsProvider.getExecutionTags(miState, parameters, executionResult, null) +
-            miState.tags()
 
-        fun errorTags(values: ErrorUtils.ErrorTagValues): Iterable<Tag> {
-            val errorTags = listOf(
-                Tag.of(GqlTag.PATH.key, values.path),
-                Tag.of(GqlTag.ERROR_CODE.key, values.type),
-                Tag.of(GqlTag.ERROR_DETAIL.key, values.detail)
-            )
-            return baseTags + errorTags
-        }
+        val state = parameters.getInstrumentationState<MetricsInstrumentationState>()
+        val tags =
+            Tags.empty()
+                .and(tagsProvider.getContextualTags())
+                .and(tagsProvider.getExecutionTags(parameters, executionResult, null))
+                .and(state.tags())
 
         ErrorUtils
             .sanitizeErrorPaths(executionResult)
             .forEach {
                 registrySupplier
                     .get()
-                    .counter(GqlMetric.ERROR.key, errorTags(it))
-                    .increment()
+                    .counter(
+                        GqlMetric.ERROR.key,
+                        tags.and(GqlTag.PATH.key, it.path)
+                            .and(GqlTag.ERROR_CODE.key, it.type)
+                            .and(GqlTag.ERROR_DETAIL.key, it.detail)
+                    ).increment()
             }
 
         return CompletableFuture.completedFuture(executionResult)
@@ -116,26 +117,25 @@ class DgsGraphQLMetricsInstrumentation(
 
     override fun instrumentDataFetcher(
         dataFetcher: DataFetcher<*>,
-        parameters: InstrumentationFieldFetchParameters,
-        state: InstrumentationState
+        parameters: InstrumentationFieldFetchParameters
     ): DataFetcher<*> {
-        val miState: MetricsInstrumentationState = state as MetricsInstrumentationState
+        val state: MetricsInstrumentationState = parameters.getInstrumentationState()
         val gqlField = TagUtils.resolveDataFetcherTagValue(parameters)
 
         if (parameters.isTrivialDataFetcher ||
-            miState.isIntrospectionQuery ||
+            state.isIntrospectionQuery ||
             TagUtils.shouldIgnoreTag(gqlField) ||
-            !schemaProvider.isFieldMetricsInstrumentationEnabled(gqlField) ||
-            !properties.resolver.enabled
+            !schemaProvider.dataFetcherInstrumentationEnabled.getOrDefault(gqlField, true)
         ) {
             return dataFetcher
         }
 
         return DataFetcher { environment ->
             val registry = registrySupplier.get()
-            val baseTags = mutableListOf(Tag.of(GqlTag.FIELD.key, gqlField)) +
-                tagsProvider.getContextualTags() +
-                miState.tags()
+            val baseTags =
+                Tags.of(GqlTag.FIELD.key, gqlField)
+                    .and(tagsProvider.getContextualTags())
+                    .and(state.tags())
 
             val sampler = Timer.start(registry)
             try {
@@ -145,19 +145,18 @@ class DgsGraphQLMetricsInstrumentation(
                         recordDataFetcherMetrics(
                             registry,
                             sampler,
-                            miState,
                             parameters,
                             error,
                             baseTags
                         )
                     }
                 } else {
-                    recordDataFetcherMetrics(registry, sampler, miState, parameters, null, baseTags)
+                    recordDataFetcherMetrics(registry, sampler, parameters, null, baseTags)
                 }
                 result
-            } catch (exc: Exception) {
-                recordDataFetcherMetrics(registry, sampler, miState, parameters, exc, baseTags)
-                throw exc
+            } catch (throwable: Throwable) {
+                recordDataFetcherMetrics(registry, sampler, parameters, throwable, baseTags)
+                throw throwable
             }
         }
     }
@@ -166,48 +165,42 @@ class DgsGraphQLMetricsInstrumentation(
      * Port the implementation from MaxQueryComplexityInstrumentation in graphql-java and store the computed complexity
      * in the MetricsInstrumentationState for access to add tags to metrics.
      */
-    override fun beginValidation(
-        parameters: InstrumentationValidationParameters,
-        state: InstrumentationState
-    ): InstrumentationContext<List<ValidationError>> {
-        return SimpleInstrumentationContext.whenCompleted { errors, throwable ->
-            if (!errors.isNullOrEmpty() || throwable != null) {
+    override fun beginValidation(parameters: InstrumentationValidationParameters): InstrumentationContext<List<ValidationError>> {
+        return whenCompleted { errors, throwable ->
+            if (errors != null && errors.isNotEmpty() || throwable != null) {
                 return@whenCompleted
             }
-            val miState: MetricsInstrumentationState = state as MetricsInstrumentationState
+            val state: MetricsInstrumentationState = parameters.getInstrumentationState()
             if (parameters.document != null) {
-                miState.querySignature = optQuerySignatureRepository.flatMap { it.get(parameters.document, parameters) }
+                state.querySignature = optQuerySignatureRepository.flatMap { it.get(parameters.document, parameters) }
             }
+            state.queryComplexity = ComplexityUtils.resolveComplexity(parameters)
         }
     }
 
-    override fun beginExecuteOperation(
-        parameters: InstrumentationExecuteOperationParameters,
-        state: InstrumentationState
-    ): InstrumentationContext<ExecutionResult>? {
-        val miState: MetricsInstrumentationState = state as MetricsInstrumentationState
+    override fun beginExecutionStrategy(
+        parameters: InstrumentationExecutionStrategyParameters
+    ): ExecutionStrategyInstrumentationContext {
+        val state: MetricsInstrumentationState = parameters.getInstrumentationState()
         if (parameters.executionContext.getRoot<Any>() == null) {
-            miState.operation =
-                Optional.of(parameters.executionContext.operationDefinition.operation.name.uppercase())
-            if (!miState.operationName.isPresent) {
-                miState.operationName = Optional.ofNullable(parameters.executionContext.operationDefinition?.name)
+            state.operation = of(parameters.executionContext.operationDefinition.operation.name.uppercase())
+            if (!state.operationName.isPresent) {
+                state.operationName = ofNullable(parameters.executionContext.operationDefinition?.name)
             }
         }
-        if (properties.tags.complexity.enabled) {
-            miState.queryComplexity = ComplexityUtils.resolveComplexity(parameters)
-        }
-        return super.beginExecuteOperation(parameters, state)
+        return DefaultExecutionStrategyInstrumentationContext
     }
 
     private fun recordDataFetcherMetrics(
         registry: MeterRegistry,
         timerSampler: Timer.Sample,
-        state: MetricsInstrumentationState,
         parameters: InstrumentationFieldFetchParameters,
         error: Throwable?,
         baseTags: Iterable<Tag>
     ) {
-        val recordedTags = baseTags + tagsProvider.getFieldFetchTags(state, parameters, error)
+        val recordedTags = Tags
+            .of(baseTags)
+            .and(tagsProvider.getFieldFetchTags(parameters, error))
 
         timerSampler.stop(
             properties
@@ -222,13 +215,13 @@ class DgsGraphQLMetricsInstrumentation(
         private val registry: MeterRegistry,
         private val limitedTagMetricResolver: LimitedTagMetricResolver
     ) : InstrumentationState {
-        private var timerSample: Optional<Timer.Sample> = Optional.empty()
+        private var timerSample: Optional<Timer.Sample> = empty()
 
         var isIntrospectionQuery = false
-        var queryComplexity: Optional<Int> = Optional.empty()
-        var operation: Optional<String> = Optional.empty()
-        var operationName: Optional<String> = Optional.empty()
-        var querySignature: Optional<QuerySignatureRepository.QuerySignature> = Optional.empty()
+        var queryComplexity: Optional<Int> = empty()
+        var operation: Optional<String> = empty()
+        var operationName: Optional<String> = empty()
+        var querySignature: Optional<QuerySignatureRepository.QuerySignature> = empty()
 
         fun startTimer() {
             this.timerSample = Optional.of(Timer.start(this.registry))
@@ -239,28 +232,27 @@ class DgsGraphQLMetricsInstrumentation(
         }
 
         @Internal
-        fun tags(): Iterable<Tag> {
-            val tags = mutableListOf<Tag>()
-            tags += Tag.of(
-                GqlTag.QUERY_COMPLEXITY.key,
-                queryComplexity.map { it.toString() }.orElse(TagUtils.TAG_VALUE_NONE)
-            )
-            tags += Tag.of(
-                GqlTag.OPERATION.key,
-                operation.map { it.uppercase() }.orElse(TagUtils.TAG_VALUE_NONE)
-            )
-
-            tags += limitedTagMetricResolver.tags(
-                GqlTag.OPERATION_NAME.key,
-                operationName.orElse(TagUtils.TAG_VALUE_ANONYMOUS)
-            )
-
-            tags += limitedTagMetricResolver.tags(
-                GqlTag.QUERY_SIG_HASH.key,
-                querySignature.map { it.hash }.orElse(TagUtils.TAG_VALUE_NONE)
-            )
-
-            return tags
+        fun tags(): Tags {
+            return Tags
+                .of(
+                    GqlTag.QUERY_COMPLEXITY.key,
+                    queryComplexity.map { it.toString() }.orElse(TagUtils.TAG_VALUE_NONE)
+                )
+                .and(
+                    GqlTag.OPERATION.key,
+                    operation.map { it.toUpperCase() }.orElse(TagUtils.TAG_VALUE_NONE)
+                )
+                .and(
+                    limitedTagMetricResolver.tags(
+                        GqlTag.OPERATION_NAME.key, operationName.orElse(TagUtils.TAG_VALUE_ANONYMOUS)
+                    )
+                )
+                .and(
+                    limitedTagMetricResolver.tags(
+                        GqlTag.QUERY_SIG_HASH.key,
+                        querySignature.map { it.hash }.orElse(TagUtils.TAG_VALUE_NONE)
+                    )
+                )
         }
     }
 
@@ -274,22 +266,23 @@ class DgsGraphQLMetricsInstrumentation(
 
         private val queryComplexityBuckets = listOf(5, 10, 25, 50, 100, 200, 500, 1000, 2000, 5000, 10000)
 
-        fun resolveComplexity(parameters: InstrumentationExecuteOperationParameters): Optional<Int> {
+        fun resolveComplexity(parameters: InstrumentationValidationParameters): Optional<Int> {
             try {
                 val queryTraverser: QueryTraverser = newQueryTraverser(parameters)
-                val valuesByParent = mutableMapOf<QueryVisitorFieldEnvironment?, Int?>()
+                val valuesByParent: MutableMap<QueryVisitorFieldEnvironment?, Int?> =
+                    LinkedHashMap<QueryVisitorFieldEnvironment?, Int?>()
                 queryTraverser.visitPostOrder(object : QueryVisitorStub() {
-                    override fun visitField(env: QueryVisitorFieldEnvironment) {
-                        val childComplexity = valuesByParent[env] ?: 0
-                        val value = calculateComplexity(env, childComplexity)
-                        valuesByParent.compute(env.parentEnvironment) { _, oldValue -> Optional.ofNullable(oldValue).orElse(0) + value }
+                    override fun visitField(env: QueryVisitorFieldEnvironment?) {
+                        val childComplexity = valuesByParent.getOrDefault(env, 0)
+                        val value = calculateComplexity(env!!, childComplexity!!)
+                        valuesByParent.compute(env.parentEnvironment) { _, oldValue -> ofNullable(oldValue).orElse(0) + value }
                     }
                 })
-                val totalComplexity = valuesByParent[null] ?: 0
-                return Optional.ofNullable(queryComplexityBuckets.asSequence().filter { totalComplexity < it }.minOrNull())
-            } catch (exc: Exception) {
-                log.error("Unable to compute the query complexity!", exc)
-                return Optional.empty()
+                val totalComplexity = valuesByParent.getOrDefault(null, 0)
+                return ofNullable(queryComplexityBuckets.filter { totalComplexity!! < it }.minOrNull())
+            } catch (error: Throwable) {
+                log.error("Unable to compute the query complexity!", error)
+                return empty()
             }
         }
 
@@ -307,13 +300,13 @@ class DgsGraphQLMetricsInstrumentation(
             return fieldComplexityCalculator(childComplexity)
         }
 
-        private fun newQueryTraverser(parameters: InstrumentationExecuteOperationParameters): QueryTraverser {
+        private fun newQueryTraverser(parameters: InstrumentationValidationParameters): QueryTraverser {
             return QueryTraverser
                 .newQueryTraverser()
-                .schema(parameters.executionContext.graphQLSchema)
-                .document(parameters.executionContext.document)
-                .operationName(parameters.executionContext.operationDefinition.name)
-                .coercedVariables(parameters.executionContext.coercedVariables)
+                .schema(parameters.schema)
+                .document(parameters.document)
+                .operationName(parameters.operation)
+                .variables(parameters.variables)
                 .build()
         }
     }
@@ -344,39 +337,40 @@ class DgsGraphQLMetricsInstrumentation(
     internal object ErrorUtils {
 
         fun sanitizeErrorPaths(executionResult: ExecutionResult): Collection<ErrorTagValues> {
-            val dedupeErrorPaths = mutableMapOf<String, ErrorTagValues>()
+            var dedupeErrorPaths: Map<String, ErrorTagValues> = emptyMap()
             executionResult.errors.forEach { error ->
                 val errorPath: List<Any>
                 val errorType: String
                 val errorDetail = errorDetailExtension(error)
                 when (error) {
                     is ValidationError -> {
-                        errorPath = error.queryPath.orEmpty()
-                        errorType = ErrorType.BAD_REQUEST.name
+                        errorPath = error.queryPath ?: emptyList()
+                        errorType = errorType(error)
                     }
                     is InvalidSyntaxError -> {
                         errorPath = emptyList()
-                        errorType = ErrorType.BAD_REQUEST.name
+                        errorType = errorType(error)
                     }
                     else -> {
-                        errorPath = error.path.orEmpty()
+                        errorPath = error.path ?: emptyList()
                         errorType = errorTypeExtension(error)
                     }
                 }
-
-                val path = errorPath.joinToString(prefix = "[", postfix = "]") { segment ->
-                    when (segment) {
-                        is Number -> "number"
-                        is String -> segment
-                        else -> segment.toString()
-                    }
-                }
-
-                dedupeErrorPaths.computeIfAbsent(path) {
-                    ErrorTagValues(path, errorType, errorDetail)
+                val sanitizedPath = errorPath.map { iter ->
+                    if (iter.toString().toIntOrNull() != null) "number"
+                    else iter.toString()
+                }.toString()
+                // in case of batch loaders, eliminate duplicate instances of the same error at different indices
+                if (!dedupeErrorPaths.contains(sanitizedPath)) {
+                    dedupeErrorPaths = dedupeErrorPaths
+                        .plus(Pair(sanitizedPath, ErrorTagValues(sanitizedPath, errorType, errorDetail)))
                 }
             }
             return dedupeErrorPaths.values
+        }
+
+        private fun <T : GraphQLError> errorType(error: T): String {
+            return error.errorType?.toString() ?: TagUtils.TAG_VALUE_UNKNOWN
         }
 
         private fun <T : GraphQLError> errorTypeExtension(error: T): String {
