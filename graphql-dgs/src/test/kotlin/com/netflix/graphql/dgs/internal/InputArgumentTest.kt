@@ -570,8 +570,6 @@ internal class InputArgumentTest {
 
     @Test
     fun `@InputArgument on an optional list of integers`() {
-        // val expectedNumbers = listOf(1, 2, 3)
-
         val schema = """
             type Query {
                 numbers(list: [Int]): String
@@ -581,7 +579,7 @@ internal class InputArgumentTest {
         @DgsComponent
         class Fetcher {
             @DgsQuery(field = "numbers")
-            fun numbers(@InputArgument("list") listOptional: Optional<List<Int>>, dfe: DataFetchingEnvironment): String {
+            fun numbers(@InputArgument("list") listOptional: Optional<List<Int>>): String {
                 assertThat(listOptional).isNotEmpty
                 assertThat(listOptional.get()).containsExactlyElementsOf(listOf(1, 2, 3))
                 return "Numbers are ${listOptional.map{ it.joinToString(", ") }.orElse("na")}"

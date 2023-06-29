@@ -84,7 +84,7 @@ class DgsDataLoaderRegistryTest {
 
     @Test
     fun combine() {
-        val error: UnsupportedOperationException = assertThrows {
+        assertThrows<UnsupportedOperationException> {
             dgsDataLoaderRegistry.combine(DataLoaderRegistry())
         }
     }

@@ -37,7 +37,6 @@ import org.springframework.web.reactive.socket.WebSocketSession
 import reactor.core.publisher.Flux
 import reactor.core.publisher.Mono
 import java.time.Duration
-import java.util.*
 import java.util.concurrent.ConcurrentHashMap
 
 class WebsocketGraphQLTransportWSProtocolHandler(private val dgsReactiveQueryExecutor: DgsReactiveQueryExecutor, private val connectionInitTimeout: Duration) : WebsocketReactiveProtocolHandler {
@@ -105,9 +104,7 @@ class WebsocketGraphQLTransportWSProtocolHandler(private val dgsReactiveQueryExe
                                             webSocketSession
                                         )
                                     }.doOnSubscribe {
-                                        if (operationMessage.id != null) {
-                                            sessions[webSocketSession.id] = mutableMapOf(operationMessage.id to it)
-                                        }
+                                        sessions[webSocketSession.id] = mutableMapOf(operationMessage.id to it)
                                     }.doOnComplete {
                                         webSocketSession.send(
                                             Flux.just(
@@ -169,7 +166,7 @@ class WebsocketGraphQLTransportWSProtocolHandler(private val dgsReactiveQueryExe
                 }
                 .log()
                 .doFinally {
-                    logger.debug("Cleaning up subscriptions for session ${webSocketSession.id}")
+                    logger.debug("Cleaning up subscriptions for session {}", webSocketSession.id)
                     sessions[webSocketSession.id]?.forEach {
                         it.value.cancel()
                     }

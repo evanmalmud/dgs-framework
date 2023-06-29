@@ -34,7 +34,7 @@ class DgsDataLoaderInstrumentationProvider(
                 .make()
                 .load(javaClass.classLoader)
                 .loaded
-        }.newInstance()
+        }.getDeclaredConstructor().newInstance()
     }
 
     override fun provide(original: BatchLoaderWithContext<*, *>, name: String): BatchLoaderWithContext<*, *> {
@@ -50,7 +50,7 @@ class DgsDataLoaderInstrumentationProvider(
                 .make()
                 .load(javaClass.classLoader)
                 .loaded
-        }.newInstance()
+        }.getDeclaredConstructor().newInstance()
     }
 
     override fun provide(original: MappedBatchLoader<*, *>, name: String): MappedBatchLoader<*, *> {
@@ -67,7 +67,7 @@ class DgsDataLoaderInstrumentationProvider(
                 .make()
                 .load(javaClass.classLoader)
                 .loaded
-        }.newInstance()
+        }.getDeclaredConstructor().newInstance()
     }
 
     override fun provide(
@@ -85,6 +85,6 @@ class DgsDataLoaderInstrumentationProvider(
                 .make()
                 .load(javaClass.classLoader)
                 .loaded
-        }.newInstance()
+        }.getDeclaredConstructor().newInstance()
     }
 }

@@ -17,8 +17,9 @@
 package com.netflix.graphql.dgs.client
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.module.kotlin.KotlinFeature
 import com.fasterxml.jackson.module.kotlin.KotlinModule
-import com.fasterxml.jackson.module.kotlin.registerKotlinModule
+import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import org.springframework.http.HttpHeaders
 import org.springframework.http.MediaType
 import org.springframework.util.ClassUtils
@@ -27,8 +28,8 @@ internal object GraphQLClients {
 
     internal val objectMapper: ObjectMapper =
         if (ClassUtils.isPresent("com.fasterxml.jackson.module.kotlin.KotlinModule\$Builder", this::class.java.classLoader)) {
-            ObjectMapper().registerModule(KotlinModule.Builder().nullIsSameAsDefault(true).build())
-        } else ObjectMapper().registerKotlinModule()
+            ObjectMapper().registerModule(KotlinModule.Builder().configure(KotlinFeature.NullIsSameAsDefault, true).build())
+        } else jacksonObjectMapper()
 
     internal val defaultHeaders: HttpHeaders = HttpHeaders.readOnlyHttpHeaders(
         HttpHeaders().apply {

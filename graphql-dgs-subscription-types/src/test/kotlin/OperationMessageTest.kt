@@ -15,10 +15,17 @@
  */
 
 import com.fasterxml.jackson.databind.JsonMappingException
-import com.fasterxml.jackson.module.kotlin.MissingKotlinParameterException
+import com.fasterxml.jackson.databind.exc.MismatchedInputException
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
-import com.fasterxml.jackson.module.kotlin.jacksonTypeRef
-import com.netflix.graphql.types.subscription.*
+import com.fasterxml.jackson.module.kotlin.readValue
+import com.netflix.graphql.types.subscription.DataPayload
+import com.netflix.graphql.types.subscription.EmptyPayload
+import com.netflix.graphql.types.subscription.GQL_CONNECTION_INIT
+import com.netflix.graphql.types.subscription.GQL_DATA
+import com.netflix.graphql.types.subscription.GQL_START
+import com.netflix.graphql.types.subscription.GQL_STOP
+import com.netflix.graphql.types.subscription.OperationMessage
+import com.netflix.graphql.types.subscription.QueryPayload
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
@@ -46,7 +53,7 @@ class OperationMessageTest {
 
     @Test
     fun rejectsMessageWithoutType() {
-        assertFailsToDeserialize<MissingKotlinParameterException>("""{"id": "2"}""")
+        assertFailsToDeserialize<MismatchedInputException>("""{"id": "2"}""")
     }
 
     @ParameterizedTest
@@ -75,8 +82,7 @@ class OperationMessageTest {
         assertThrows<E> { deserialize(message) }
     }
 
-    private fun deserialize(message: String) =
-        MAPPER.readValue(message, jacksonTypeRef<OperationMessage>())
+    private fun deserialize(message: String) = MAPPER.readValue<OperationMessage>(message)
 
     companion object {
         val MAPPER = jacksonObjectMapper()
@@ -142,7 +148,7 @@ class OperationMessageTest {
                 OperationMessage(
                     GQL_START,
                     QueryPayload(
-                        extensions = mapOf(Pair("a", "b")),
+                        extensions = mapOf("a" to "b"),
                         operationName = "query",
                         query = "my-query"
                     ),
@@ -163,8 +169,8 @@ class OperationMessageTest {
                 OperationMessage(
                     GQL_START,
                     QueryPayload(
-                        variables = mapOf(Pair("c", "d")),
-                        extensions = mapOf(Pair("a", "b")),
+                        variables = mapOf("c" to "d"),
+                        extensions = mapOf("a" to "b"),
                         operationName = "query",
                         query = "my-query"
                     ),
@@ -185,7 +191,7 @@ class OperationMessageTest {
                 """.trimIndent(),
                 OperationMessage(
                     GQL_DATA,
-                    DataPayload(data = mapOf(Pair("a", 1), Pair("b", "hello"), Pair("c", false))),
+                    DataPayload(data = mapOf("a" to 1, "b" to "hello", "c" to false)),
                     "3"
                 )
             ),
@@ -212,7 +218,7 @@ class OperationMessageTest {
                  },
                  "id": "3"}
                 """.trimIndent(),
-                OperationMessage(GQL_DATA, DataPayload(mapOf(Pair("a", 1), Pair("b", "hello"), Pair("c", false)), listOf("an-error")), "3")
+                OperationMessage(GQL_DATA, DataPayload(mapOf("a" to 1, "b" to "hello", "c" to false), listOf("an-error")), "3")
             )
         )
     }
