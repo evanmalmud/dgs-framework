@@ -22,7 +22,9 @@ dependencies {
 
     implementation("jakarta.servlet:jakarta.servlet-api")
     implementation("org.springframework:spring-webmvc")
-    implementation("org.springframework.graphql:spring-graphql:1.2.0")
+    implementation("org.springframework.boot:spring-boot-starter-graphql:3.1.0")
+    //implementation("org.springframework.graphql:spring-graphql:1.2.0")
+
 
 
     compileOnly("org.springframework:spring-test")

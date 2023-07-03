@@ -522,7 +522,13 @@
                 "com.netflix.graphql.dgs:graphql-dgs-spring-boot-oss-autoconfigure",
                 "com.netflix.graphql.dgs:graphql-dgs-spring-graphql"
             ],
-            "locked": "3.0.6"
+            "locked": "3.1.0"
+        },
+        "org.springframework.boot:spring-boot-starter-graphql": {
+            "firstLevelTransitive": [
+                "com.netflix.graphql.dgs:graphql-dgs-spring-graphql"
+            ],
+            "locked": "3.1.0"
         },
         "org.springframework.boot:spring-boot-starter-test": {
             "locked": "3.0.6"
@@ -535,12 +541,6 @@
         },
         "org.springframework.cloud:spring-cloud-dependencies": {
             "locked": "2022.0.0"
-        },
-        "org.springframework.graphql:spring-graphql": {
-            "firstLevelTransitive": [
-                "com.netflix.graphql.dgs:graphql-dgs-spring-graphql"
-            ],
-            "locked": "1.2.0"
         },
         "org.springframework.security:spring-security-bom": {
             "locked": "6.0.1"
@@ -562,7 +562,7 @@
                 "com.netflix.graphql.dgs:graphql-dgs-spring-graphql",
                 "com.netflix.graphql.dgs:graphql-dgs-spring-webmvc"
             ],
-            "locked": "6.0.8"
+            "locked": "6.0.9"
         },
         "org.springframework:spring-webmvc": {
             "firstLevelTransitive": [
@@ -996,7 +996,13 @@
                 "com.netflix.graphql.dgs:graphql-dgs-spring-boot-oss-autoconfigure",
                 "com.netflix.graphql.dgs:graphql-dgs-spring-graphql"
             ],
-            "locked": "3.0.6"
+            "locked": "3.1.0"
+        },
+        "org.springframework.boot:spring-boot-starter-graphql": {
+            "firstLevelTransitive": [
+                "com.netflix.graphql.dgs:graphql-dgs-spring-graphql"
+            ],
+            "locked": "3.1.0"
         },
         "org.springframework.boot:spring-boot-starter-web": {
             "locked": "3.0.6"
@@ -1006,12 +1012,6 @@
         },
         "org.springframework.cloud:spring-cloud-dependencies": {
             "locked": "2022.0.0"
-        },
-        "org.springframework.graphql:spring-graphql": {
-            "firstLevelTransitive": [
-                "com.netflix.graphql.dgs:graphql-dgs-spring-graphql"
-            ],
-            "locked": "1.2.0"
         },
         "org.springframework.security:spring-security-bom": {
             "locked": "6.0.1"
@@ -1033,7 +1033,7 @@
                 "com.netflix.graphql.dgs:graphql-dgs-spring-graphql",
                 "com.netflix.graphql.dgs:graphql-dgs-spring-webmvc"
             ],
-            "locked": "6.0.8"
+            "locked": "6.0.9"
         },
         "org.springframework:spring-webmvc": {
             "firstLevelTransitive": [
@@ -1397,7 +1397,13 @@
                 "com.netflix.graphql.dgs:graphql-dgs-spring-boot-oss-autoconfigure",
                 "com.netflix.graphql.dgs:graphql-dgs-spring-graphql"
             ],
-            "locked": "3.0.6"
+            "locked": "3.1.0"
+        },
+        "org.springframework.boot:spring-boot-starter-graphql": {
+            "firstLevelTransitive": [
+                "com.netflix.graphql.dgs:graphql-dgs-spring-graphql"
+            ],
+            "locked": "3.1.0"
         },
         "org.springframework.boot:spring-boot-starter-test": {
             "locked": "3.0.6"
@@ -1410,12 +1416,6 @@
         },
         "org.springframework.cloud:spring-cloud-dependencies": {
             "locked": "2022.0.0"
-        },
-        "org.springframework.graphql:spring-graphql": {
-            "firstLevelTransitive": [
-                "com.netflix.graphql.dgs:graphql-dgs-spring-graphql"
-            ],
-            "locked": "1.2.0"
         },
         "org.springframework.security:spring-security-bom": {
             "locked": "6.0.1"
@@ -1437,7 +1437,7 @@
                 "com.netflix.graphql.dgs:graphql-dgs-spring-graphql",
                 "com.netflix.graphql.dgs:graphql-dgs-spring-webmvc"
             ],
-            "locked": "6.0.8"
+            "locked": "6.0.9"
         },
         "org.springframework:spring-webmvc": {
             "firstLevelTransitive": [
