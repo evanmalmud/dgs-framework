@@ -19,6 +19,8 @@ import com.netflix.graphql.dgs.internal.DefaultDgsGraphQLContextBuilder
 import com.netflix.graphql.dgs.internal.DefaultDgsQueryExecutor
 import com.netflix.graphql.dgs.internal.DgsDataLoaderProvider
 import com.netflix.graphql.dgs.internal.DgsSchemaProvider
+import com.netflix.graphql.dgs.internal.method.ArgumentResolver
+import com.netflix.graphql.dgs.mvc.internal.method.HandlerMethodArgumentResolverAdapter
 import graphql.execution.AsyncExecutionStrategy
 import graphql.execution.AsyncSerialExecutionStrategy
 import graphql.execution.DataFetcherExceptionHandler
@@ -30,9 +32,20 @@ import graphql.execution.preparsed.PreparsedDocumentProvider
 import graphql.schema.GraphQLSchema
 import org.springframework.beans.factory.ObjectProvider
 import org.springframework.beans.factory.annotation.Qualifier
+import org.springframework.beans.factory.config.ConfigurableBeanFactory
 import org.springframework.boot.autoconfigure.AutoConfiguration
+import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication
 import org.springframework.context.annotation.Bean
+import org.springframework.context.annotation.Configuration
 import org.springframework.core.env.Environment
+import org.springframework.web.bind.support.WebDataBinderFactory
+import org.springframework.web.method.annotation.RequestHeaderMapMethodArgumentResolver
+import org.springframework.web.method.annotation.RequestHeaderMethodArgumentResolver
+import org.springframework.web.method.annotation.RequestParamMapMethodArgumentResolver
+import org.springframework.web.method.annotation.RequestParamMethodArgumentResolver
+import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerAdapter
+import org.springframework.web.servlet.mvc.method.annotation.ServletCookieValueMethodArgumentResolver
+import org.springframework.web.servlet.mvc.method.annotation.ServletRequestDataBinderFactory
 import java.util.*
 
 /**
@@ -81,8 +94,45 @@ open class DgsSpringGraphQLAutoConfiguration {
         )
     }
 
-    /*@Configuration
-    @ConditionalOnClass(DispatcherServlet::class)
-    @Import(GraphiQLConfigurer::class)
-    open class DgsGraphiQLConfiguration*/
+    @Configuration(proxyBeanMethods = false)
+    @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
+    open class WebMvcArgumentHandlerConfiguration {
+
+        @Qualifier
+        private annotation class Dgs
+
+        @Bean
+        @Dgs
+        open fun dgsWebDataBinderFactory(adapter: ObjectProvider<RequestMappingHandlerAdapter>): WebDataBinderFactory {
+            return ServletRequestDataBinderFactory(listOf(), adapter.ifAvailable?.webBindingInitializer)
+        }
+
+        @Bean
+        open fun requestHeaderMapResolver(@Dgs dataBinderFactory: WebDataBinderFactory): ArgumentResolver {
+            return HandlerMethodArgumentResolverAdapter(RequestHeaderMapMethodArgumentResolver(), dataBinderFactory)
+        }
+
+        @Bean
+        open fun requestHeaderResolver(beanFactory: ConfigurableBeanFactory, @Dgs dataBinderFactory: WebDataBinderFactory): ArgumentResolver {
+            return HandlerMethodArgumentResolverAdapter(
+                RequestHeaderMethodArgumentResolver(beanFactory),
+                dataBinderFactory
+            )
+        }
+
+        @Bean
+        open fun requestParamResolver(@Dgs dataBinderFactory: WebDataBinderFactory): ArgumentResolver {
+            return HandlerMethodArgumentResolverAdapter(RequestParamMethodArgumentResolver(false), dataBinderFactory)
+        }
+
+        @Bean
+        open fun requestParamMapResolver(@Dgs dataBinderFactory: WebDataBinderFactory): ArgumentResolver {
+            return HandlerMethodArgumentResolverAdapter(RequestParamMapMethodArgumentResolver(), dataBinderFactory)
+        }
+
+        @Bean
+        open fun cookieValueResolver(beanFactory: ConfigurableBeanFactory, @Dgs dataBinderFactory: WebDataBinderFactory): ArgumentResolver {
+            return HandlerMethodArgumentResolverAdapter(ServletCookieValueMethodArgumentResolver(beanFactory), dataBinderFactory)
+        }
+    }
 }

@@ -20,19 +20,31 @@ import com.netflix.graphql.dgs.internal.DefaultDgsGraphQLContextBuilder
 import com.netflix.graphql.dgs.internal.DgsDataLoaderProvider
 import com.netflix.graphql.dgs.internal.DgsWebMvcRequestData
 import graphql.GraphQLContext
+import jakarta.servlet.http.HttpServletRequest
 import org.springframework.graphql.server.WebGraphQlInterceptor
 import org.springframework.graphql.server.WebGraphQlRequest
 import org.springframework.graphql.server.WebGraphQlResponse
+import org.springframework.web.context.request.RequestContextHolder
+import org.springframework.web.context.request.ServletRequestAttributes
+import org.springframework.web.context.request.ServletWebRequest
+import org.springframework.web.context.request.WebRequest
 import reactor.core.publisher.Mono
 import java.util.*
 import java.util.concurrent.CompletableFuture
+
 
 class DgsGraphQLInterceptor(
     private val dgsDataLoaderProvider: DgsDataLoaderProvider,
     private val dgsContextBuilder: DefaultDgsGraphQLContextBuilder
 ) : WebGraphQlInterceptor {
     override fun intercept(request: WebGraphQlRequest, chain: WebGraphQlInterceptor.Chain): Mono<WebGraphQlResponse> {
-        val dgsContext = dgsContextBuilder.build(DgsWebMvcRequestData(request.extensions, request.headers))
+        // We need to pass in the original server request for the dgs context
+        val servletRequest: HttpServletRequest? = if (RequestContextHolder.getRequestAttributes() is ServletRequestAttributes) {
+            (RequestContextHolder.getRequestAttributes() as ServletRequestAttributes).request
+        } else null
+
+        val webRequest: WebRequest = ServletWebRequest(servletRequest)
+        val dgsContext = dgsContextBuilder.build(DgsWebMvcRequestData(request.extensions, request.headers, webRequest))
         val graphQLContextFuture = CompletableFuture<GraphQLContext>()
         val dataLoaderRegistry = dgsDataLoaderProvider.buildRegistryWithContextSupplier { graphQLContextFuture.get() }
 
