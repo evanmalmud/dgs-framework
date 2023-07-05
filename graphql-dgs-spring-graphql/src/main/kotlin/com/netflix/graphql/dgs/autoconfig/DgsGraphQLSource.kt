@@ -26,12 +26,9 @@ import graphql.execution.SubscriptionExecutionStrategy
 import graphql.execution.instrumentation.Instrumentation
 import graphql.execution.preparsed.PreparsedDocumentProvider
 import graphql.schema.GraphQLSchema
-import org.springframework.boot.autoconfigure.graphql.GraphQlSourceBuilderCustomizer
 import org.springframework.graphql.execution.GraphQlSource
-import org.springframework.graphql.execution.GraphQlSource.SchemaResourceBuilder
 import java.util.*
 import java.util.concurrent.atomic.AtomicReference
-
 
 class DgsGraphQLSource(
     private val schemaProvider: DgsSchemaProvider,

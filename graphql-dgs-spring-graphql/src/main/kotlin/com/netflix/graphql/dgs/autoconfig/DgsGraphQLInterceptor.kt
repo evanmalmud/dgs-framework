@@ -32,7 +32,6 @@ import reactor.core.publisher.Mono
 import java.util.*
 import java.util.concurrent.CompletableFuture
 
-
 class DgsGraphQLInterceptor(
     private val dgsDataLoaderProvider: DgsDataLoaderProvider,
     private val dgsContextBuilder: DefaultDgsGraphQLContextBuilder
