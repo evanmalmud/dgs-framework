@@ -17,11 +17,15 @@
 package com.netflix.graphql.dgs.example.datafetcher;
 
 import com.netflix.graphql.dgs.DgsComponent;
+import com.netflix.graphql.dgs.DgsQuery;
+import com.netflix.graphql.dgs.InputArgument;
+import org.springframework.http.HttpHeaders;
+import org.springframework.web.bind.annotation.RequestHeader;
 
 @DgsComponent
 public class WithHeader {
-   /* @DgsQuery
+    @DgsQuery
     public String helloWithHeaders(@InputArgument String name, @RequestHeader(HttpHeaders.AUTHORIZATION) String authorization) {
         return "hello, " + authorization + "!";
-    }*/
+    }
 }

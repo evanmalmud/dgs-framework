@@ -16,20 +16,18 @@
 
 package com.netflix.graphql.dgs.example.datafetcher;
 
-import com.netflix.graphql.dgs.DgsComponent;
-import com.netflix.graphql.dgs.DgsDataFetchingEnvironment;
-import com.netflix.graphql.dgs.DgsMutation;
-import com.netflix.graphql.dgs.InputArgument;
+import com.netflix.graphql.dgs.*;
 import com.netflix.graphql.dgs.internal.DgsWebMvcRequestData;
+import org.springframework.web.bind.annotation.CookieValue;
 import org.springframework.web.context.request.ServletWebRequest;
 
 @DgsComponent
 public class WithCookie {
 
-    /*@DgsQuery
+    @DgsQuery
     public String withCookie(@CookieValue String mydgscookie) {
         return mydgscookie;
-    }*/
+    }
 
     @DgsMutation
     public String updateCookie(@InputArgument String value, DgsDataFetchingEnvironment dfe) {

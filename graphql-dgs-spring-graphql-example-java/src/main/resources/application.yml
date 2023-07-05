@@ -5,6 +5,9 @@ spring:
   graphql:
     graphiql:
       enabled: true
+    schema:
+      locations: "classpath:schema/**/"
+
 
 management:
   endpoints:
