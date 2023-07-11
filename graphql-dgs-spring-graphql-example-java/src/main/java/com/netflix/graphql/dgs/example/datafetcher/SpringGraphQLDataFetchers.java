@@ -14,15 +14,17 @@
  * limitations under the License.
  */
 
+package com.netflix.graphql.dgs.example.datafetcher;
 
-dependencies {
-    api(project(":graphql-dgs-spring-boot-oss-autoconfigure"))
-    api(project(":graphql-dgs-spring-graphql"))
-    api(project(":graphql-dgs-client"))
-    api(project(":graphql-error-types"))
-    api("org.springframework.boot:spring-boot-starter-graphql:3.1.0")
 
-    implementation("org.springframework.boot:spring-boot-starter-websocket")
-    implementation("org.springframework.boot:spring-boot-starter-web")
-    implementation("org.springframework:spring-webmvc")
+import org.springframework.graphql.data.method.annotation.Argument;
+import org.springframework.graphql.data.method.annotation.QueryMapping;
+import org.springframework.stereotype.Controller;
+
+@Controller
+public class SpringGraphQLDataFetchers {
+    @QueryMapping
+    public String greetings(@Argument String name) {
+        return "Hello, " + name + "!";
+    }
 }

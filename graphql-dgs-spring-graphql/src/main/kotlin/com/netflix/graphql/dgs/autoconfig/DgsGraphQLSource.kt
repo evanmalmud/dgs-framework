@@ -26,7 +26,9 @@ import graphql.execution.SubscriptionExecutionStrategy
 import graphql.execution.instrumentation.Instrumentation
 import graphql.execution.preparsed.PreparsedDocumentProvider
 import graphql.schema.GraphQLSchema
+import org.springframework.beans.factory.ObjectProvider
 import org.springframework.graphql.execution.GraphQlSource
+import org.springframework.graphql.execution.RuntimeWiringConfigurer
 import java.util.*
 import java.util.concurrent.atomic.AtomicReference
 
@@ -38,7 +40,8 @@ class DgsGraphQLSource(
     private val mutationExecutionStrategy: ExecutionStrategy,
     private val idProvider: Optional<ExecutionIdProvider>,
     private val reloadIndicator: DefaultDgsQueryExecutor.ReloadSchemaIndicator = DefaultDgsQueryExecutor.ReloadSchemaIndicator { false },
-    private val preparsedDocumentProvider: PreparsedDocumentProvider? = null
+    private val preparsedDocumentProvider: PreparsedDocumentProvider? = null,
+    private val wiringConfigurers: ObjectProvider<RuntimeWiringConfigurer>
 ) : GraphQlSource {
 
     private var schema = AtomicReference(schemaProvider.schema())
@@ -61,6 +64,7 @@ class DgsGraphQLSource(
         if (idProvider.isPresent) {
             graphQLBuilder.executionIdProvider(idProvider.get())
         }
+
         return graphQLBuilder.build()
     }
 

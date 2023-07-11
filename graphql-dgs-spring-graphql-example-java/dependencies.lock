@@ -702,7 +702,8 @@
         },
         "org.springframework.boot:spring-boot-starter-graphql": {
             "firstLevelTransitive": [
-                "com.netflix.graphql.dgs:graphql-dgs-spring-graphql"
+                "com.netflix.graphql.dgs:graphql-dgs-spring-graphql",
+                "com.netflix.graphql.dgs:graphql-dgs-spring-graphql-starter"
             ],
             "locked": "3.1.0"
         },
@@ -1298,7 +1299,8 @@
         },
         "org.springframework.boot:spring-boot-starter-graphql": {
             "firstLevelTransitive": [
-                "com.netflix.graphql.dgs:graphql-dgs-spring-graphql"
+                "com.netflix.graphql.dgs:graphql-dgs-spring-graphql",
+                "com.netflix.graphql.dgs:graphql-dgs-spring-graphql-starter"
             ],
             "locked": "3.1.0"
         },
@@ -1863,7 +1865,8 @@
         },
         "org.springframework.boot:spring-boot-starter-graphql": {
             "firstLevelTransitive": [
-                "com.netflix.graphql.dgs:graphql-dgs-spring-graphql"
+                "com.netflix.graphql.dgs:graphql-dgs-spring-graphql",
+                "com.netflix.graphql.dgs:graphql-dgs-spring-graphql-starter"
             ],
             "locked": "3.1.0"
         },
