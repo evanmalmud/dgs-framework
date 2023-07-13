@@ -144,7 +144,7 @@
             "firstLevelTransitive": [
                 "com.netflix.graphql.dgs:graphql-dgs-client"
             ],
-            "locked": "3.5.5"
+            "locked": "3.5.6"
         },
         "org.jetbrains.kotlin:kotlin-bom": {
             "locked": "1.7.20"
@@ -172,6 +172,12 @@
         },
         "org.springframework.boot:spring-boot-starter-actuator": {
             "locked": "3.0.6"
+        },
+        "org.springframework.boot:spring-boot-starter-graphql": {
+            "firstLevelTransitive": [
+                "com.netflix.graphql.dgs:graphql-dgs-spring-graphql-starter"
+            ],
+            "locked": "3.1.0"
         },
         "org.springframework.boot:spring-boot-starter-web": {
             "locked": "3.0.6"
@@ -336,7 +342,7 @@
             "firstLevelTransitive": [
                 "com.netflix.graphql.dgs:graphql-dgs-client"
             ],
-            "locked": "3.5.5"
+            "locked": "3.5.6"
         },
         "org.jetbrains.kotlin:kotlin-bom": {
             "locked": "1.7.20"
@@ -373,6 +379,12 @@
         },
         "org.springframework.boot:spring-boot-starter-actuator": {
             "locked": "3.0.6"
+        },
+        "org.springframework.boot:spring-boot-starter-graphql": {
+            "firstLevelTransitive": [
+                "com.netflix.graphql.dgs:graphql-dgs-spring-graphql-starter"
+            ],
+            "locked": "3.1.0"
         },
         "org.springframework.boot:spring-boot-starter-web": {
             "locked": "3.0.6"
@@ -1508,7 +1520,7 @@
             "firstLevelTransitive": [
                 "com.netflix.graphql.dgs:graphql-dgs-client"
             ],
-            "locked": "3.5.5"
+            "locked": "3.5.6"
         },
         "io.projectreactor:reactor-test": {
             "locked": "3.5.5"
@@ -1539,6 +1551,12 @@
         },
         "org.springframework.boot:spring-boot-starter-actuator": {
             "locked": "3.0.6"
+        },
+        "org.springframework.boot:spring-boot-starter-graphql": {
+            "firstLevelTransitive": [
+                "com.netflix.graphql.dgs:graphql-dgs-spring-graphql-starter"
+            ],
+            "locked": "3.1.0"
         },
         "org.springframework.boot:spring-boot-starter-test": {
             "locked": "3.0.6"

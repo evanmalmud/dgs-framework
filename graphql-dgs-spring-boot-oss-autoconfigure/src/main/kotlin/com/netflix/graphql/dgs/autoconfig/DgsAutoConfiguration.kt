@@ -90,6 +90,7 @@ open class DgsAutoConfiguration(
     }
 
     @Bean
+    @ConditionalOnMissingBean
     open fun dgsQueryExecutor(
         applicationContext: ApplicationContext,
         schema: GraphQLSchema,

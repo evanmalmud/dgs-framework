@@ -26,7 +26,6 @@ dependencies {
     //implementation("org.springframework.graphql:spring-graphql:1.2.0")
 
 
-
     compileOnly("org.springframework:spring-test")
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("org.springframework.boot:spring-boot-starter-web")

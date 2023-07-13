@@ -15,6 +15,7 @@
  */
 
 package com.netflix.graphql.dgs.autoconfig
+import com.netflix.graphql.dgs.DgsQueryExecutor
 import com.netflix.graphql.dgs.internal.DefaultDgsGraphQLContextBuilder
 import com.netflix.graphql.dgs.internal.DefaultDgsQueryExecutor
 import com.netflix.graphql.dgs.internal.DgsDataLoaderProvider
@@ -35,11 +36,14 @@ import org.springframework.beans.factory.ObjectProvider
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.beans.factory.config.ConfigurableBeanFactory
 import org.springframework.boot.autoconfigure.AutoConfiguration
+import org.springframework.boot.autoconfigure.AutoConfigureBefore
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication
 import org.springframework.boot.autoconfigure.graphql.GraphQlSourceBuilderCustomizer
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.core.env.Environment
+import org.springframework.graphql.client.GraphQlClient
+import org.springframework.graphql.execution.DefaultExecutionGraphQlService
 import org.springframework.graphql.execution.RuntimeWiringConfigurer
 import org.springframework.web.bind.support.WebDataBinderFactory
 import org.springframework.web.method.annotation.RequestHeaderMapMethodArgumentResolver
@@ -57,37 +61,8 @@ import java.util.*
  */
 @Suppress("SpringJavaInjectionPointsAutowiringInspection")
 @AutoConfiguration
+@AutoConfigureBefore(name = ["com.netflix.graphql.dgs.autoconfig.DgsAutoConfiguration"])
 open class DgsSpringGraphQLAutoConfiguration {
-
-    // When creating a bean directly for GraphQlSource, only DGS related schema and data fetchers are picked up
-    // Any spring GraphQL annotated controllers etc. will be ignored
-   /* @Bean
-    open fun dgsGraphQLSource(
-        schema: GraphQLSchema,
-        schemaProvider: DgsSchemaProvider,
-        dataFetcherExceptionHandler: DataFetcherExceptionHandler,
-        instrumentations: ObjectProvider<Instrumentation>,
-        environment: Environment,
-        @Qualifier("query") providedQueryExecutionStrategy: Optional<ExecutionStrategy>,
-        @Qualifier("mutation") providedMutationExecutionStrategy: Optional<ExecutionStrategy>,
-        idProvider: Optional<ExecutionIdProvider>,
-        reloadSchemaIndicator: DefaultDgsQueryExecutor.ReloadSchemaIndicator,
-        preparsedDocumentProvider: ObjectProvider<PreparsedDocumentProvider>
-    ): DgsGraphQLSource {
-        val queryExecutionStrategy =
-            providedQueryExecutionStrategy.orElse(AsyncExecutionStrategy(dataFetcherExceptionHandler))
-        val mutationExecutionStrategy =
-            providedMutationExecutionStrategy.orElse(AsyncSerialExecutionStrategy(dataFetcherExceptionHandler))
-
-        val instrumentationImpls = instrumentations.orderedStream().toList()
-        val instrumentation: Instrumentation? = when {
-            instrumentationImpls.size == 1 -> instrumentationImpls.single()
-            instrumentationImpls.isNotEmpty() -> ChainedInstrumentation(instrumentationImpls)
-            else -> null
-        }
-        return DgsGraphQLSource(schemaProvider, instrumentation, dataFetcherExceptionHandler, queryExecutionStrategy, mutationExecutionStrategy, idProvider, reloadSchemaIndicator, preparsedDocumentProvider.getIfAvailable())
-    }*/
-
     // Instead of creating a GraphQLSource directly, this allows us to add datafetchers/type registries/scalars that are
     // using DGS annotations processed by the DgsSchemaProvider in addition to SpringGraphQL controllers
     @Bean
@@ -109,7 +84,7 @@ open class DgsSpringGraphQLAutoConfiguration {
         reloadSchemaIndicator: DefaultDgsQueryExecutor.ReloadSchemaIndicator,
         preparsedDocumentProvider: ObjectProvider<PreparsedDocumentProvider>,
         @Qualifier("dgsRuntime") dgsRuntimeWiringConfigurer: RuntimeWiringConfigurer
-    ): GraphQlSourceBuilderCustomizer? {
+    ): GraphQlSourceBuilderCustomizer {
         val queryExecutionStrategy =
             providedQueryExecutionStrategy.orElse(AsyncExecutionStrategy(dataFetcherExceptionHandler))
         val mutationExecutionStrategy =
@@ -152,6 +127,11 @@ open class DgsSpringGraphQLAutoConfiguration {
             dgsDataLoaderProvider,
             dgsDefaultContextBuilder
         )
+    }
+
+    @Bean
+    open fun springGraphQLDgsQueryExecutor(executionService: DefaultExecutionGraphQlService, dgsContextBuilder: DefaultDgsGraphQLContextBuilder, dgsDataLoaderProvider: DgsDataLoaderProvider): DgsQueryExecutor {
+        return SpringGraphQLDgsQueryExecutor(executionService, dgsContextBuilder, dgsDataLoaderProvider)
     }
 
     @Configuration(proxyBeanMethods = false)
