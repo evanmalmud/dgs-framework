@@ -42,7 +42,6 @@ import org.springframework.boot.autoconfigure.graphql.GraphQlSourceBuilderCustom
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.core.env.Environment
-import org.springframework.graphql.client.GraphQlClient
 import org.springframework.graphql.execution.DefaultExecutionGraphQlService
 import org.springframework.graphql.execution.RuntimeWiringConfigurer
 import org.springframework.web.bind.support.WebDataBinderFactory
