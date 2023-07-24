@@ -40,7 +40,7 @@ import java.util.concurrent.CompletableFuture
 class SpringGraphQLDgsQueryExecutor(val executionService: DefaultExecutionGraphQlService, private val dgsContextBuilder: DefaultDgsGraphQLContextBuilder, private val dgsDataLoaderProvider: DgsDataLoaderProvider) : DgsQueryExecutor {
 
     override fun execute(
-        query: String?,
+        query: String,
         variables: Map<String, Any>,
         extensions: Map<String, Any>?,
         headers: HttpHeaders?,
@@ -66,6 +66,8 @@ class SpringGraphQLDgsQueryExecutor(val executionService: DefaultExecutionGraphQ
                 .graphQLContext(dgsContext)
                 .dataLoaderRegistry(dataLoaderRegistry).build()
         }
+
+        graphQLContextFuture.complete(request.toExecutionInput().graphQLContext)
 
         val execute = executionService.execute(
             request

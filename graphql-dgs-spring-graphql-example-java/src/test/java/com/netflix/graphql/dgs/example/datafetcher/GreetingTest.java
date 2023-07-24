@@ -69,12 +69,11 @@ public class GreetingTest {
     }
 
     @Test
-    @Disabled
     void withDataLoaderAsync() {
         ExecutionResult result = queryExecutor.execute("{withDataLoaderContext}");
         assertThat(result.isDataPresent()).isTrue();
         Map<String, Object> data = result.getData();
-        assertThat(data.get("withDataLoaderContext")).isEqualTo("hello, a!");
+        assertThat(data.get("withDataLoaderContext")).isEqualTo("Custom state! A");
     }
 
     @Test
