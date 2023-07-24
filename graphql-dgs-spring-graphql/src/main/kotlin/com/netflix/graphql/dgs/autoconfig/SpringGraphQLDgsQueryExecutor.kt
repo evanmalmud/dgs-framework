@@ -17,8 +17,13 @@
 package com.netflix.graphql.dgs.autoconfig
 
 import com.jayway.jsonpath.DocumentContext
+import com.jayway.jsonpath.JsonPath
 import com.jayway.jsonpath.TypeRef
+import com.jayway.jsonpath.spi.mapper.MappingException
 import com.netflix.graphql.dgs.DgsQueryExecutor
+import com.netflix.graphql.dgs.exceptions.DgsQueryExecutionDataExtractionException
+import com.netflix.graphql.dgs.exceptions.QueryException
+import com.netflix.graphql.dgs.internal.BaseDgsQueryExecutor
 import com.netflix.graphql.dgs.internal.DefaultDgsGraphQLContextBuilder
 import com.netflix.graphql.dgs.internal.DgsDataLoaderProvider
 import com.netflix.graphql.dgs.internal.DgsWebMvcRequestData
@@ -77,51 +82,75 @@ class SpringGraphQLDgsQueryExecutor(val executionService: DefaultExecutionGraphQ
         jsonPath: String,
         variables: MutableMap<String, Any>
     ): T {
-        TODO("Not yet implemented")
-//        return graphqlClient.document(query).variables(variables).retrieve(jsonPath).toEntity(object: ParameterizedTypeReference<T>(){}).block()!!
+        return JsonPath.read(getJsonResult(query, variables), jsonPath)
     }
 
-    override fun <T : Any?> executeAndExtractJsonPath(query: String?, jsonPath: String?, headers: HttpHeaders?): T {
-        TODO("Not yet implemented")
+    override fun <T : Any?> executeAndExtractJsonPath(query: String, jsonPath: String, headers: HttpHeaders): T {
+        return JsonPath.read(getJsonResult(query, emptyMap(), headers), jsonPath)
     }
 
     override fun <T : Any?> executeAndExtractJsonPath(
-        query: String?,
-        jsonPath: String?,
-        servletWebRequest: ServletWebRequest?
+        query: String,
+        jsonPath: String,
+        servletWebRequest: ServletWebRequest
     ): T {
-        TODO("Not yet implemented")
+        val httpHeaders = HttpHeaders()
+        servletWebRequest.headerNames.forEach { name ->
+            httpHeaders.addAll(name, servletWebRequest.getHeaderValues(name).orEmpty().toList())
+        }
+
+        return JsonPath.read(getJsonResult(query, emptyMap(), httpHeaders, servletWebRequest), jsonPath)
     }
 
-    override fun executeAndGetDocumentContext(query: String?, variables: MutableMap<String, Any>?): DocumentContext {
-        TODO("Not yet implemented")
+    override fun executeAndGetDocumentContext(query: String, variables: MutableMap<String, Any>): DocumentContext {
+        return BaseDgsQueryExecutor.parseContext.parse(getJsonResult(query, variables))
     }
 
     override fun executeAndGetDocumentContext(
-        query: String?,
-        variables: MutableMap<String, Any>?,
+        query: String,
+        variables: MutableMap<String, Any>,
         headers: HttpHeaders?
     ): DocumentContext {
-        TODO("Not yet implemented")
+        return BaseDgsQueryExecutor.parseContext.parse(getJsonResult(query, variables, headers))
     }
 
     override fun <T : Any?> executeAndExtractJsonPathAsObject(
-        query: String?,
-        jsonPath: String?,
-        variables: MutableMap<String, Any>?,
-        clazz: Class<T>?,
+        query: String,
+        jsonPath: String,
+        variables: MutableMap<String, Any>,
+        clazz: Class<T>,
         headers: HttpHeaders?
     ): T {
-        TODO("Not yet implemented")
+        val jsonResult = getJsonResult(query, variables, headers)
+        return try {
+            BaseDgsQueryExecutor.parseContext.parse(jsonResult).read(jsonPath, clazz)
+        } catch (ex: MappingException) {
+            throw DgsQueryExecutionDataExtractionException(ex, jsonResult, jsonPath, clazz)
+        }
     }
 
     override fun <T : Any?> executeAndExtractJsonPathAsObject(
-        query: String?,
-        jsonPath: String?,
-        variables: MutableMap<String, Any>?,
-        typeRef: TypeRef<T>?,
+        query: String,
+        jsonPath: String,
+        variables: MutableMap<String, Any>,
+        typeRef: TypeRef<T>,
         headers: HttpHeaders?
     ): T {
-        TODO("Not yet implemented")
+        val jsonResult = getJsonResult(query, variables, headers)
+        return try {
+            BaseDgsQueryExecutor.parseContext.parse(jsonResult).read(jsonPath, typeRef)
+        } catch (ex: MappingException) {
+            throw DgsQueryExecutionDataExtractionException(ex, jsonResult, jsonPath, typeRef)
+        }
+    }
+
+    private fun getJsonResult(query: String, variables: Map<String, Any>, headers: HttpHeaders? = null, servletWebRequest: ServletWebRequest? = null): String {
+        val executionResult = execute(query, variables, null, headers, null, servletWebRequest)
+
+        if (executionResult.errors.size > 0) {
+            throw QueryException(executionResult.errors)
+        }
+
+        return BaseDgsQueryExecutor.objectMapper.writeValueAsString(executionResult.toSpecification())
     }
 }
