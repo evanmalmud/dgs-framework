@@ -110,8 +110,8 @@ public class HelloDataFetcher {
         throw new RuntimeException("That's broken!");
     }
 
-   /* @DgsData(parentType = "Query", field = "withPagination")
+    @DgsData(parentType = "Query", field = "withPagination")
     public Connection<Message> withPagination(DataFetchingEnvironment env) {
        return new SimpleListConnection<>(Collections.singletonList(new Message("This is a generated connection"))).get(env);
-    }*/
+    }
 }
