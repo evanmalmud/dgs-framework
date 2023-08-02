@@ -53,6 +53,8 @@ class DgsGraphQLInterceptor(
                 .graphQLContext(dgsContext)
                 .dataLoaderRegistry(dataLoaderRegistry).build()
         }
+        graphQLContextFuture.complete(request.toExecutionInput().graphQLContext)
+
         return chain.next(request)
     }
 }
