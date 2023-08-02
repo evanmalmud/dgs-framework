@@ -28,7 +28,7 @@ type Query {
     ### To show how to handle HttpHeaders
     helloWithHeaders(name: String): String
 
-    #withPagination: MessageConnection
+    withPagination: MessageConnection
     withCookie: String
 }
 
@@ -40,7 +40,7 @@ type Nested2 {
     message: String
 }
 
-type Message {
+type Message @connection {
     info: String
 }
 
@@ -92,6 +92,7 @@ type Stock {
 }
 
 scalar Upload
+directive @connection on OBJECT
 
 
 

@@ -269,21 +269,6 @@ class DgsSchemaProvider(
         dgsComponents.forEach { dgsComponent -> invokeDgsRuntimeWiring(dgsComponent, runtimeWiringBuilder) }
 
         return runtimeWiringBuilder
-
-        // Need to set up for federation separately
-        /*val graphQLSchema =
-            Federation.transform(mergedRegistry, runtimeWiringBuilder.build()).fetchEntities(entityFetcher)
-                .resolveEntityType(typeResolver).build()
-
-        val endTime = System.currentTimeMillis()
-        val totalTime = endTime - startTime
-        logger.debug("DGS initialized schema in {}ms", totalTime)
-
-        return if (mockProviders.isNotEmpty()) {
-            DgsSchemaTransformer().transformSchemaWithMockProviders(graphQLSchema, mockProviders)
-        } else {
-            graphQLSchema
-        }*/
     }
 
     fun transformFederation(typeDefinitionRegistry: TypeDefinitionRegistry, runtimeWiring: RuntimeWiring): GraphQLSchema {
